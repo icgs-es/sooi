@@ -1,0 +1,319 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Detalle oportunidad | SOOI{% endblock %}
+{% block section_title %}Detalle de oportunidad{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ item.title }}</h1>
+    <p>Ficha operativa de la oportunidad inmobiliaria.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/oportunidades/">Volver a oportunidades</a>
+      <a class="btn" href="/app/oportunidades/{{ item.id }}/editar/">Editar oportunidad</a>
+      <a class="btn" href="/app/oportunidades/{{ item.id }}/eliminar/">Eliminar oportunidad</a>
+      <a class="btn" href="/app/captacion/{{ item.captured_property.id }}/">Ver inmueble origen</a>
+      {% if item.source_url %}
+        <a class="btn" href="{{ item.source_url }}" target="_blank" rel="noopener">Abrir anuncio origen</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Expediente de búsqueda</h1>
+    <p style="margin-top:10px;">
+      {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
+    </p>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="quick-card">
+      <h3>Estado</h3>
+      <p>{{ item.get_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Prioridad</h3>
+      <p>{{ item.get_priority_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Score</h3>
+      <p>
+        {% if item.opportunity_score is not None %}
+          {{ item.opportunity_score }}/100
+          {% if item.score_band %} · {{ item.score_band }}{% endif %}
+        {% else %}
+          —
+        {% endif %}
+      </p>
+    </div>
+    <div class="quick-card">
+      <h3>Asignado a</h3>
+      <p>{% if item.assigned_to %}{{ item.assigned_to }}{% else %}—{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Origen de la captación</h1>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+      <div>
+        <strong>Fuente</strong>
+        <p style="margin-top:6px;">{{ item.source_name|default:"—" }}</p>
+      </div>
+      <div>
+        <strong>Operación</strong>
+        <p style="margin-top:6px;">{{ item.captured_property.get_operation_type_display|default:"—" }}</p>
+      </div>
+      <div>
+        <strong>Tipología</strong>
+        <p style="margin-top:6px;">{{ item.captured_property.get_property_type_display|default:"—" }}</p>
+      </div>
+      <div>
+        <strong>Precio captado</strong>
+        <p style="margin-top:6px;">
+          {% if item.captured_property.price %}{{ item.captured_property.price }} €{% else %}—{% endif %}
+        </p>
+      </div>
+      <div>
+        <strong>Provincia</strong>
+        <p style="margin-top:6px;">{{ item.captured_property.province|default:"—" }}</p>
+      </div>
+      <div>
+        <strong>Municipio</strong>
+        <p style="margin-top:6px;">{{ item.captured_property.municipality|default:"—" }}</p>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <strong>URL origen</strong>
+        <p style="margin-top:6px; word-break:break-word;">
+          {% if item.source_url %}
+            <a href="{{ item.source_url }}" target="_blank" rel="noopener">{{ item.source_url }}</a>
+          {% else %}
+            —
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Control operativo</h1>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+      <div>
+        <strong>Siguiente acción</strong>
+        <p style="margin-top:6px;">{{ item.get_next_action_type_display }}</p>
+      </div>
+      <div>
+        <strong>Próxima revisión</strong>
+        <p style="margin-top:6px;">
+          {% if item.next_review_at %}{{ item.next_review_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+        </p>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <strong>Detalle de acción</strong>
+        <p style="margin-top:6px;">{{ item.next_action_notes|default:"—" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Comercialización</h1>
+      <div style="margin-top:14px;">
+        <div style="margin-bottom:14px;">
+          <strong>Comercializadora</strong>
+          <p style="margin-top:6px;">
+            {% if item.broker_company %}{{ item.broker_company.name }}{% else %}—{% endif %}
+          </p>
+        </div>
+
+        <div>
+          <strong>Contacto principal</strong>
+          {% if item.main_contact %}
+            <p style="margin-top:6px; margin-bottom:6px;">{{ item.main_contact.full_name }}</p>
+            <p style="margin:0; color:#64748b;">Rol: {{ item.main_contact.get_role_display }}</p>
+            <p style="margin:6px 0 0 0; color:#64748b;">
+              Teléfono: {{ item.main_contact.phone|default:"—" }}
+            </p>
+            <p style="margin:6px 0 0 0; color:#64748b;">
+              Email: {{ item.main_contact.email|default:"—" }}
+            </p>
+            <p style="margin:6px 0 0 0; color:#64748b;">
+              Canal preferido: {{ item.main_contact.get_preferred_channel_display }}
+            </p>
+          {% else %}
+            <p style="margin-top:6px;">—</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Ubicación operativa</h1>
+      <div style="margin-top:14px;">
+        <p><strong>Provincia:</strong> {{ item.province|default:"—" }}</p>
+        <p><strong>Municipio:</strong> {{ item.municipality|default:"—" }}</p>
+        <p><strong>Zona:</strong> {{ item.zone|default:"—" }}</p>
+        <p><strong>Código postal:</strong> {{ item.postal_code|default:"—" }}</p>
+        <p><strong>Dirección o referencia:</strong> {{ item.address_text|default:"—" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Negocio</h1>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; margin-top:14px;">
+      <div>
+        <strong>Precio actual</strong>
+        <p style="margin-top:6px;">{% if item.asking_price_current %}{{ item.asking_price_current }} €{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Precio objetivo</strong>
+        <p style="margin-top:6px;">{% if item.target_price_internal %}{{ item.target_price_internal }} €{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Oferta máxima</strong>
+        <p style="margin-top:6px;">{% if item.max_offer_price %}{{ item.max_offer_price }} €{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Renta mensual esperada</strong>
+        <p style="margin-top:6px;">{% if item.expected_rent_monthly %}{{ item.expected_rent_monthly }} €{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Rentabilidad bruta estimada</strong>
+        <p style="margin-top:6px;">{% if item.estimated_gross_yield %}{{ item.estimated_gross_yield }} %{% else %}—{% endif %}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Documentación</h1>
+      <div style="margin-top:14px;">
+        <p><strong>Referencia catastral:</strong> {{ item.cadastral_reference|default:"—" }}</p>
+        <p><strong>Estado nota simple:</strong> {{ item.get_simple_note_status_display }}</p>
+        <p>
+          <strong>Fecha nota simple:</strong>
+          {% if item.simple_note_date %}{{ item.simple_note_date|date:"d/m/Y" }}{% else %}—{% endif %}
+        </p>
+      </div>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Resumen operativo</h1>
+      <p style="margin-top:14px; white-space:pre-line;">{{ item.summary|default:"—" }}</p>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Notas de decisión</h1>
+    <p style="margin-top:14px; white-space:pre-line;">{{ item.decision_notes|default:"—" }}</p>
+
+    {% if item.discard_reason %}
+      <div style="margin-top:18px;">
+        <strong>Motivo de descarte</strong>
+        <p style="margin-top:6px; white-space:pre-line;">{{ item.discard_reason }}</p>
+      </div>
+    {% endif %}
+  </div>
+
+    <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Registrar actividad</h1>
+
+      <form method="post" action="/app/oportunidades/{{ item.id }}/actividad/" style="margin-top:14px;">
+        {% csrf_token %}
+
+        <div style="display:grid; grid-template-columns:1fr; gap:14px;">
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">Tipo</label>
+            {{ activity_form.activity_type }}
+          </div>
+
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">Título</label>
+            {{ activity_form.summary }}
+          </div>
+
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">Detalle</label>
+            {{ activity_form.details }}
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <button class="btn" type="submit">Guardar actividad</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Actividad</h1>
+
+      {% if related_activities %}
+        <div style="margin-top:14px;">
+          {% for activity in related_activities %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                <div>
+                  <div style="font-weight:700;">{{ activity.title }}</div>
+                  <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                    {{ activity.get_activity_type_display }}
+                    {% if activity.created_by %} · {{ activity.created_by }}{% endif %}
+                  </div>
+                </div>
+                <div style="font-size:13px; color:#64748b; white-space:nowrap;">
+                  {{ activity.created_at|date:"d/m/Y H:i" }}
+                </div>
+              </div>
+
+              {% if activity.notes %}
+                <div style="margin-top:8px; color:#334155; white-space:pre-line;">
+                  {{ activity.notes }}
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Aún no hay actividad registrada.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Tareas relacionadas</h1>
+      {% if related_tasks %}
+        <div style="margin-top:14px;">
+          {% for task in related_tasks %}
+            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ task.title }}</div>
+              <div style="color:#64748b; font-size:14px;">
+                {{ task.get_status_display }} · {{ task.get_priority_display }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Sin tareas relacionadas.</p>
+      {% endif %}
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Alertas relacionadas</h1>
+      {% if related_alerts %}
+        <div style="margin-top:14px;">
+          {% for alert in related_alerts %}
+            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ alert.title }}</div>
+              <div style="color:#64748b; font-size:14px;">
+                {{ alert.get_alert_type_display }} · {{ alert.get_severity_display }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Sin alertas relacionadas.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

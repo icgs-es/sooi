@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+uploads/
+staticfiles/
+static_collected/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Docker / runtime
+*.pid
+*.sock
+docker-data/
+volumes/
+postgres_data/
+redis_data/
+
+# Backups / dumps
+backups/
+*.dump
+*.sql
+*.sql.gz
+*.tar
+*.tar.gz
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

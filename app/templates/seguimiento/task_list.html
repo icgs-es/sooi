@@ -1,0 +1,126 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Tareas | SOOI{% endblock %}
+{% block section_title %}Tareas{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Tareas</h1>
+    <p>Acciones pendientes reales sobre inmuebles captados y oportunidades.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/">Volver al panel</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Búsqueda</label>
+        <select name="search_profile_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:220px;">
+          <option value="">Todas</option>
+          {% for search in available_search_profiles %}
+            <option value="{{ search.id }}" {% if current_search_profile_id == search.id|stringformat:"s" %}selected{% endif %}>{{ search.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
+        <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todos</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Prioridad</label>
+        <select name="priority" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todas</option>
+          {% for value, label in priority_choices %}
+            <option value="{{ value }}" {% if current_priority == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+        <a class="btn" href="/app/tareas/">Limpiar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    {% if tasks %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Tipo</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Prioridad</th>
+              <th style="padding:12px;">Fecha límite</th>
+              <th style="padding:12px;">Oportunidad</th>
+              <th style="padding:12px;">Inmueble</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in tasks %}
+              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/tareas/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.title }}
+                  </a>
+                </td>
+                <td style="padding:12px;">
+                  {% if item.property_opportunity and item.property_opportunity.search_profile %}
+                    {% include "seguimiento/_search_badge.html" with search_profile=item.property_opportunity.search_profile %}
+                  {% elif item.captured_property and item.captured_property.search_profile %}
+                    {% include "seguimiento/_search_badge.html" with search_profile=item.captured_property.search_profile %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.get_task_type_display }}</td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{{ item.get_priority_display }}</td>
+                <td style="padding:12px;">{% if item.due_date %}{{ item.due_date|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.property_opportunity %}{{ item.property_opportunity.title }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.captured_property %}{{ item.captured_property.title }}{% else %}—{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <details class="action-menu">
+                    <summary class="action-menu__trigger">⋯</summary>
+
+                    <div class="action-menu__panel">
+                      {% if item.property_opportunity %}
+                        <a class="action-menu__item" href="/app/oportunidades/{{ item.property_opportunity.id }}/">
+                          Ver oportunidad
+                        </a>
+                      {% endif %}
+
+                      {% if item.captured_property %}
+                        <a class="action-menu__item" href="/app/captacion/{{ item.captured_property.id }}/">
+                          Ver inmueble
+                        </a>
+                      {% endif %}
+                    </div>
+                  </details>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:16px; color:#64748b;">Todavía no hay tareas para mostrar.</p>
+      <div class="actions">
+        <a class="btn" href="/app/">Volver al panel</a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

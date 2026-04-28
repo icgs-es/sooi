@@ -1,0 +1,118 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}{{ section_title }} | SOOI{% endblock %}
+{% block section_title %}{{ section_title }}{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ section_title }}</h1>
+    <p>Configuración interna del proveedor IA.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/ia/proveedores/">Volver a proveedores IA</a>
+      <a class="btn" href="/app/configuracion/">Volver a configuración</a>
+    </div>
+  </div>
+
+  <form method="post" style="margin-top:18px;">
+    {% csrf_token %}
+
+    {% if form.errors %}
+      <div class="page-card" style="border:1px solid #fecaca; background:#fef2f2; color:#991b1b;">
+        <strong>Revisa el formulario.</strong>
+        {{ form.non_field_errors }}
+        {% for field in form %}
+          {% if field.errors %}
+            <div style="margin-top:6px;">
+              <strong>{{ field.label }}:</strong> {{ field.errors|join:", " }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Proveedor</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.name.label }}</label>
+          {{ form.name }}
+        </div>
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.provider_code.label }}</label>
+          {{ form.provider_code }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.model_name.label }}</label>
+          {{ form.model_name }}
+        </div>
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.base_url.label }}</label>
+          {{ form.base_url }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.api_key.label }}</label>
+          {{ form.api_key }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Comportamiento</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.priority_order.label }}</label>
+          {{ form.priority_order }}
+        </div>
+
+        <div style="display:flex; align-items:flex-end;">
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <label style="display:flex; align-items:center; gap:8px;">{{ form.is_active }} {{ form.is_active.label }}</label>
+            <label style="display:flex; align-items:center; gap:8px;">{{ form.is_default }} {{ form.is_default.label }}</label>
+            <label style="display:flex; align-items:center; gap:8px;">{{ form.supports_web_search }} {{ form.supports_web_search.label }}</label>
+            <label style="display:flex; align-items:center; gap:8px;">{{ form.supports_reasoning }} {{ form.supports_reasoning.label }}</label>
+          </div>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.notes.label }}</label>
+          {{ form.notes }}
+        </div>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:18px;">
+      <button class="btn btn-primary" type="submit">Guardar proveedor IA</button>
+      <a class="btn" href="/app/ia/proveedores/">Cancelar</a>
+    </div>
+  </form>
+
+  <style>
+    input[type="text"],
+    input[type="url"],
+    input[type="password"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      font: inherit;
+      background: #fff;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    @media (max-width: 960px) {
+      .page-card div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+{% endblock %}

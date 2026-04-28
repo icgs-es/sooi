@@ -1,0 +1,216 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Editar oportunidad | SOOI{% endblock %}
+{% block section_title %}Editar oportunidad{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Editar oportunidad</h1>
+    <p>Edición interna de la oportunidad.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/oportunidades/{{ item.id }}/">Volver al detalle</a>
+      <a class="btn" href="/app/oportunidades/">Volver a oportunidades</a>
+    </div>
+  </div>
+
+  <form method="post" style="margin-top:18px;">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="page-card" style="margin-bottom:18px; border:1px solid #fecaca; background:#fff1f2;">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Estado y control</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Título</strong></label>
+          {{ form.title }}
+          {{ form.title.errors }}
+        </div>
+
+        <div>
+          <label><strong>Asignado a</strong></label>
+          {{ form.assigned_to }}
+          {{ form.assigned_to.errors }}
+        </div>
+
+        <div>
+          <label><strong>Estado</strong></label>
+          {{ form.status }}
+          {{ form.status.errors }}
+        </div>
+
+        <div>
+          <label><strong>Prioridad</strong></label>
+          {{ form.priority }}
+          {{ form.priority.errors }}
+        </div>
+
+        <div>
+          <label><strong>Próxima acción</strong></label>
+          {{ form.next_action_type }}
+          {{ form.next_action_type.errors }}
+        </div>
+
+        <div>
+          <label><strong>Próxima revisión</strong></label>
+          {{ form.next_review_at }}
+          {{ form.next_review_at.errors }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>Detalle de acción</strong></label>
+          {{ form.next_action_notes }}
+          {{ form.next_action_notes.errors }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>Score oportunidad</strong></label>
+          {{ form.opportunity_score }}
+          {{ form.opportunity_score.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Ubicación</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Provincia</strong></label>
+          {{ form.province }}
+          {{ form.province.errors }}
+        </div>
+
+        <div>
+          <label><strong>Municipio</strong></label>
+          {{ form.municipality }}
+          {{ form.municipality.errors }}
+        </div>
+
+        <div>
+          <label><strong>Zona</strong></label>
+          {{ form.zone }}
+          {{ form.zone.errors }}
+        </div>
+
+        <div>
+          <label><strong>Código postal</strong></label>
+          {{ form.postal_code }}
+          {{ form.postal_code.errors }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>Dirección o referencia</strong></label>
+          {{ form.address_text }}
+          {{ form.address_text.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Negocio</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Precio actual</strong></label>
+          {{ form.asking_price_current }}
+          {{ form.asking_price_current.errors }}
+        </div>
+
+        <div>
+          <label><strong>Precio objetivo interno</strong></label>
+          {{ form.target_price_internal }}
+          {{ form.target_price_internal.errors }}
+        </div>
+
+        <div>
+          <label><strong>Oferta máxima</strong></label>
+          {{ form.max_offer_price }}
+          {{ form.max_offer_price.errors }}
+        </div>
+
+        <div>
+          <label><strong>Renta mensual esperada</strong></label>
+          {{ form.expected_rent_monthly }}
+          {{ form.expected_rent_monthly.errors }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>Rentabilidad bruta estimada (%)</strong></label>
+          {{ form.estimated_gross_yield }}
+          {{ form.estimated_gross_yield.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Contacto y comercialización</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Comercializadora</strong></label>
+          {{ form.broker_company }}
+          {{ form.broker_company.errors }}
+        </div>
+
+        <div>
+          <label><strong>Contacto principal</strong></label>
+          {{ form.main_contact }}
+          {{ form.main_contact.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Documentación</h1>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Referencia catastral</strong></label>
+          {{ form.cadastral_reference }}
+          {{ form.cadastral_reference.errors }}
+        </div>
+
+        <div>
+          <label><strong>Estado nota simple</strong></label>
+          {{ form.simple_note_status }}
+          {{ form.simple_note_status.errors }}
+        </div>
+
+        <div>
+          <label><strong>Fecha nota simple</strong></label>
+          {{ form.simple_note_date }}
+          {{ form.simple_note_date.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Análisis interno</h1>
+      <div style="display:grid; grid-template-columns:1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Resumen operativo</strong></label>
+          {{ form.summary }}
+          {{ form.summary.errors }}
+        </div>
+
+        <div>
+          <label><strong>Notas de decisión</strong></label>
+          {{ form.decision_notes }}
+          {{ form.decision_notes.errors }}
+        </div>
+
+        <div>
+          <label><strong>Motivo de descarte</strong></label>
+          {{ form.discard_reason }}
+          {{ form.discard_reason.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <button class="btn" type="submit">Guardar cambios</button>
+    </div>
+  </form>
+{% endblock %}

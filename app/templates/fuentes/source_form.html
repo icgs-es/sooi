@@ -1,0 +1,78 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}{% if item %}Editar fuente{% else %}Nueva fuente{% endif %} | SOOI{% endblock %}
+{% block section_title %}{% if item %}Editar fuente{% else %}Nueva fuente{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    {% if item %}
+      <h1>Editar fuente</h1>
+      <p>Actualiza los datos de la fuente.</p>
+    {% else %}
+      <h1>Nueva fuente</h1>
+      <p>Da de alta una fuente real de captación.</p>
+    {% endif %}
+
+    <div class="actions">
+      <a class="btn" href="/app/fuentes/">Volver a fuentes</a>
+    </div>
+  </div>
+
+  <form method="post" style="margin-top:18px;">
+    {% csrf_token %}
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Datos de la fuente</h1>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Nombre</strong></label>
+          {{ form.name }}
+          {{ form.name.errors }}
+        </div>
+
+        <div>
+          <label><strong>Código</strong></label>
+          {{ form.code }}
+          {{ form.code.errors }}
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>URL base</strong></label>
+          {{ form.base_url }}
+          {{ form.base_url.errors }}
+        </div>
+
+        <div>
+          <label><strong>Tipo de fuente</strong></label>
+          {{ form.source_type }}
+          {{ form.source_type.errors }}
+        </div>
+
+        <div style="display:flex; gap:24px; align-items:center; padding-top:28px;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0;">
+            {{ form.is_active }}
+            <span>Activa</span>
+          </label>
+
+          <label style="display:flex; align-items:center; gap:8px; margin:0;">
+            {{ form.is_verified }}
+            <span>Verificada</span>
+          </label>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <label><strong>Notas</strong></label>
+          {{ form.notes }}
+          {{ form.notes.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <button class="btn" type="submit">
+        {% if item %}Guardar cambios{% else %}Guardar fuente{% endif %}
+      </button>
+    </div>
+  </form>
+{% endblock %}

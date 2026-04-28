@@ -1,0 +1,104 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Detalle inmueble | SOOI{% endblock %}
+{% block section_title %}Detalle de captación{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ item.title }}</h1>
+    <p>Ficha base del inmueble captado dentro de la Bandeja de Captación.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/captacion/">Volver a captación</a>
+      
+      <a class="btn" href="/app/captacion/{{ item.id }}/editar/">Editar captación</a>
+      
+      {% if not item.is_interesting %}
+        <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/" style="display:inline;">
+          {% csrf_token %}
+          <button class="btn" type="submit">Marcar interesante</button>
+        </form>
+      {% endif %}
+
+      {% if item.status != "in_review" %}
+        <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/" style="display:inline;">
+          {% csrf_token %}
+          <button class="btn" type="submit">Marcar en revisión</button>
+        </form>
+      {% endif %}
+
+      {% if existing_opportunity %}
+        <a class="btn btn-primary" href="/app/oportunidades/{{ existing_opportunity.id }}/">Ver oportunidad creada</a>
+      {% else %}
+        {% if not existing_opportunity %}
+          <form method="post" action="/app/captacion/{{ item.id }}/eliminar/" style="display:inline;">
+            {% csrf_token %}
+            <button class="btn" type="submit">Eliminar captación</button>
+          </form>
+        {% endif %}
+        <form method="post" action="/app/captacion/{{ item.id }}/convertir/" style="display:inline;">
+          {% csrf_token %}
+          <button class="btn btn-primary" type="submit">Convertir en oportunidad</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="quick-card">
+      <h3>Método</h3>
+      <p>{{ item.get_entry_mode_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Fuente</h3>
+      <p>{{ item.source.name }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Estado</h3>
+      <p>{{ item.get_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Revisión</h3>
+      <p>{{ item.get_review_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Operación</h3>
+      <p>{{ item.get_operation_type_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Precio</h3>
+      <p>{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Ubicación</h3>
+      <p>{{ item.municipality|default:"" }}{% if item.municipality and item.province %}, {% endif %}{{ item.province|default:"—" }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Tipo</h3>
+      <p>{{ item.get_property_type_display }}</p>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Datos principales</h1>
+    <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div><strong>Dormitorios:</strong> {{ item.bedrooms|default:"—" }}</div>
+      <div><strong>Baños:</strong> {{ item.bathrooms|default:"—" }}</div>
+      <div><strong>Superficie:</strong> {% if item.area_m2 %}{{ item.area_m2 }} m²{% else %}—{% endif %}</div>
+      <div><strong>Interesante:</strong> {% if item.is_interesting %}Sí{% else %}No{% endif %}</div>
+      <div><strong>Perfil de búsqueda:</strong> {% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</div>
+      <div><strong>URL origen:</strong> {% if item.source_url %}<a href="{{ item.source_url }}" target="_blank" rel="noopener">Abrir enlace</a>{% else %}—{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Descripción original</h1>
+    <p style="margin-top:14px; white-space:pre-line;">{{ item.description_raw|default:"Sin descripción." }}</p>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">IA y notas</h1>
+    <p style="margin-top:14px;"><strong>Resumen IA:</strong> {{ item.ai_summary|default:"—" }}</p>
+    <p style="margin-top:10px;"><strong>Notas manuales:</strong> {{ item.manual_notes|default:"—" }}</p>
+  </div>
+{% endblock %}

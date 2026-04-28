@@ -1,0 +1,132 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}{{ section_title }} | SOOI{% endblock %}
+{% block section_title %}{{ section_title }}{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ section_title }}</h1>
+    <p>Configuración interna del sistema y datos básicos de empresa.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/ia/proveedores/">Proveedores IA</a>
+      <a class="btn" href="/app/">Volver al panel</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      {% if form.errors %}
+        <div style="margin-bottom:16px; padding:12px 14px; border:1px solid #fecaca; background:#fef2f2; color:#991b1b; border-radius:10px;">
+          <strong>Revisa el formulario.</strong>
+          {{ form.non_field_errors }}
+          {% for field in form %}
+            {% if field.errors %}
+              <div style="margin-top:6px;">
+                <strong>{{ field.label }}:</strong> {{ field.errors|join:", " }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="page-card" style="margin-top:0;">
+        <h1 style="font-size:22px;">Empresa</h1>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.company_name.label }}</label>
+            {{ form.company_name }}
+          </div>
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.company_email.label }}</label>
+            {{ form.company_email }}
+          </div>
+
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.company_phone.label }}</label>
+            {{ form.company_phone }}
+          </div>
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.company_website.label }}</label>
+            {{ form.company_website }}
+          </div>
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.logo.label }}</label>
+            {{ form.logo }}
+            {% if item.logo %}
+              <div style="margin-top:10px;">
+                <img src="{{ item.logo.url }}" alt="Logo actual" style="max-height:72px; width:auto; border:1px solid #dbe3ee; border-radius:10px; padding:6px; background:#fff;">
+              </div>
+            {% endif %}
+          </div>
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.login_logo.label }}</label>
+            {{ form.login_logo }}
+            {% if item.login_logo %}
+              <div style="margin-top:10px;">
+                <img src="{{ item.login_logo.url }}" alt="Logo login actual" style="max-height:72px; width:auto; border:1px solid #dbe3ee; border-radius:10px; padding:6px; background:#fff;">
+              </div>
+            {% endif %}
+          </div>
+          <div style="grid-column:1 / -1;">
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.company_notes.label }}</label>
+            {{ form.company_notes }}
+          </div>
+        </div>
+      </div>
+
+      <div class="page-card" style="margin-top:18px;">
+        <h1 style="font-size:22px;">IA por defecto</h1>
+        <div style="display:grid; grid-template-columns:1fr; gap:18px; margin-top:14px;">
+          <div>
+            <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.default_ai_provider.label }}</label>
+            {{ form.default_ai_provider }}
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:18px;">
+        <button class="btn btn-primary" type="submit">Guardar configuración</button>
+        <a class="btn" href="/app/">Cancelar</a>
+      </div>
+    </form>
+  </div>
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Configuración operativa</h1>
+    <p style="margin-top:8px; color:#64748b;">
+      Gestión de catálogos y parámetros internos del sistema.
+    </p>
+
+    <div class="actions" style="margin-top:14px;">
+      <a class="btn" href="/app/fuentes/">Fuentes</a>
+      <a class="btn" href="/app/usuarios/">Usuarios</a>
+    </div>
+  </div>
+  <style>
+    input[type="text"],
+    input[type="email"],
+    input[type="url"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      font: inherit;
+      background: #fff;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    @media (max-width: 960px) {
+      .page-card div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+{% endblock %}

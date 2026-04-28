@@ -1,0 +1,125 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}{{ section_title }} | SOOI{% endblock %}
+{% block section_title %}{{ section_title }}{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ section_title }}</h1>
+    <p>Configura operación, tipologías y texto guía para la captación IA.</p>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    <form method="post">
+      {% csrf_token %}
+      
+      {% if form.errors %}
+        <div style="margin-bottom:16px; padding:12px 14px; border:1px solid #fecaca; background:#fef2f2; color:#991b1b; border-radius:10px;">
+          <strong>Revisa el formulario.</strong>
+          {{ form.non_field_errors }}
+          {% for field in form %}
+            {% if field.errors %}
+              <div style="margin-top:6px;">
+                <strong>{{ field.label }}:</strong> {{ field.errors|join:", " }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.name.label }}</label>
+          {{ form.name }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.operation_type.label }}</label>
+          {{ form.operation_type }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.province.label }}</label>
+          {{ form.province }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.zone.label }}</label>
+          {{ form.zone }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.max_price.label }}</label>
+          {{ form.max_price }}
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.min_bedrooms.label }}</label>
+          {{ form.min_bedrooms }}
+        </div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <label style="display:block; font-weight:600; margin-bottom:8px;">{{ form.property_types.label }}</label>
+        {{ form.property_types }}
+      </div>
+
+      <div style="margin-top:18px;">
+        <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.ai_prompt.label }}</label>
+        {{ form.ai_prompt }}
+      </div>
+
+      <div style="margin-top:18px;">
+        <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.notes.label }}</label>
+        {{ form.notes }}
+      </div>
+
+      <div style="margin-top:18px; padding:14px; border:1px solid #dbe3ee; border-radius:12px; background:#f8fafc;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:700;">
+          {{ form.automation_enabled }} Permitir automatización futura para esta búsqueda
+        </label>
+        <p style="margin:8px 0 0; color:#64748b; font-size:14px;">
+          Por defecto, SOOI no ejecuta exploraciones automáticas. Esta opción solo tendrá efecto cuando activemos el programador de automatizaciones.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">{{ submit_label|default:"Guardar" }}</button>
+        <a class="btn" href="/app/busquedas/">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <style>
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      font: inherit;
+      background: #fff;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    #id_property_types {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    #id_property_types label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+{% endblock %}

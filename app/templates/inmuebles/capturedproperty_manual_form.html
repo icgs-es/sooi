@@ -1,0 +1,146 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Alta manual | SOOI{% endblock %}
+{% block section_title %}Alta manual{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    {% if item %}
+      <h1>Editar captación</h1>
+      <p>Actualiza los datos de la captación manual o revisada.</p>
+    {% else %}
+      <h1>Alta manual de captación</h1>
+      <p>Introduce un inmueble detectado manualmente y asígnalo a una búsqueda activa.</p>
+    {% endif %}
+
+    <div class="actions">
+      {% if item %}
+        <a class="btn" href="/app/captacion/{{ item.id }}/">Volver al detalle</a>
+      {% else %}
+        <a class="btn" href="/app/captacion/">Volver a captación</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" style="margin-top:18px;">
+    {% csrf_token %}
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Origen y clasificación</h1>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div style="grid-column:1 / -1;">
+          <label><strong>Búsqueda asociada</strong></label>
+          {{ form.search_profile }}
+          {{ form.search_profile.errors }}
+          <p style="margin:6px 0 0; color:#64748b; font-size:13px;">
+            Toda captación debe pertenecer a una búsqueda para mantener el hilo operativo.
+          </p>
+        </div>
+
+        <div>
+          <label><strong>Fuente</strong></label>
+          {{ form.source }}
+          {{ form.source.errors }}
+        </div>
+
+        <div>
+          <label><strong>Operación</strong></label>
+          {{ form.operation_type }}
+          {{ form.operation_type.errors }}
+        </div>
+
+        <div>
+          <label><strong>Tipología</strong></label>
+          {{ form.property_type }}
+          {{ form.property_type.errors }}
+        </div>
+
+        <div>
+          <label><strong>URL origen</strong></label>
+          {{ form.source_url }}
+          {{ form.source_url.errors }}
+          <p style="margin:6px 0 0; color:#64748b; font-size:13px;">
+            Guardar solo como referencia interna. Contactar preferentemente desde la web original.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Datos principales</h1>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div style="grid-column:1 / -1;">
+          <label><strong>Título</strong></label>
+          {{ form.title }}
+          {{ form.title.errors }}
+        </div>
+
+        <div>
+          <label><strong>Precio</strong></label>
+          {{ form.price }}
+          {{ form.price.errors }}
+        </div>
+
+        <div>
+          <label><strong>Provincia</strong></label>
+          {{ form.province }}
+          {{ form.province.errors }}
+        </div>
+
+        <div>
+          <label><strong>Municipio</strong></label>
+          {{ form.municipality }}
+          {{ form.municipality.errors }}
+        </div>
+
+        <div>
+          <label><strong>Zona</strong></label>
+          {{ form.zone_text }}
+          {{ form.zone_text.errors }}
+        </div>
+
+        <div>
+          <label><strong>Superficie m²</strong></label>
+          {{ form.area_m2 }}
+          {{ form.area_m2.errors }}
+        </div>
+
+        <div>
+          <label><strong>Dormitorios</strong></label>
+          {{ form.bedrooms }}
+          {{ form.bedrooms.errors }}
+        </div>
+
+        <div>
+          <label><strong>Baños</strong></label>
+          {{ form.bathrooms }}
+          {{ form.bathrooms.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Descripción y notas</h1>
+
+      <div style="display:grid; grid-template-columns:1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>Descripción mínima operativa</strong></label>
+          {{ form.description_raw }}
+          {{ form.description_raw.errors }}
+        </div>
+
+        <div>
+          <label><strong>Notas manuales</strong></label>
+          {{ form.manual_notes }}
+          {{ form.manual_notes.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <button class="btn" type="submit">Guardar captación manual</button>
+    </div>
+  </form>
+{% endblock %}

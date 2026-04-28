@@ -1,0 +1,31 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Eliminar tarea | SOOI{% endblock %}
+{% block section_title %}Eliminar tarea{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Eliminar tarea</h1>
+    <p>Vas a eliminar esta tarea del sistema.</p>
+
+    <div style="margin-top:18px; padding:16px; border:1px solid #fecaca; background:#fff1f2; border-radius:12px;">
+      <div><strong>Título:</strong> {{ item.title }}</div>
+      <div style="margin-top:6px;"><strong>Estado:</strong> {{ item.get_status_display }}</div>
+      <div style="margin-top:6px;"><strong>Prioridad:</strong> {{ item.get_priority_display }}</div>
+    </div>
+
+    <p style="margin-top:18px; color:#991b1b;">
+      Esta acción elimina la tarea de forma directa.
+    </p>
+
+    <form method="post" style="margin-top:18px;">
+      {% csrf_token %}
+      <div class="actions">
+        <button class="btn" type="submit" style="border-color:#dc2626; color:#dc2626;">
+          Sí, eliminar tarea
+        </button>
+        <a class="btn" href="/app/tareas/{{ item.id }}/">Cancelar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

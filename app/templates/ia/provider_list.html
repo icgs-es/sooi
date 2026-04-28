@@ -1,0 +1,57 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Proveedores IA | SOOI{% endblock %}
+{% block section_title %}Proveedores IA{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Proveedores IA</h1>
+    <p>Gestión interna de conexiones y modelos de inteligencia artificial.</p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/app/ia/proveedores/nuevo/">Nuevo proveedor</a>
+      <a class="btn" href="/app/configuracion/">Volver a configuración</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    {% if items %}
+      <div style="overflow:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Nombre</th>
+              <th style="padding:12px;">Proveedor</th>
+              <th style="padding:12px;">Modelo</th>
+              <th style="padding:12px;">Base URL</th>
+              <th style="padding:12px;">API key</th>
+              <th style="padding:12px;">Activo</th>
+              <th style="padding:12px;">Default</th>
+              <th style="padding:12px;">Prioridad</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; font-weight:600;">{{ item.name }}</td>
+                <td style="padding:12px;">{{ item.get_provider_code_display }}</td>
+                <td style="padding:12px;">{{ item.model_name }}</td>
+                <td style="padding:12px;">{{ item.base_url|default:"—" }}</td>
+                <td style="padding:12px;">{{ item.masked_api_key|default:"—" }}</td>
+                <td style="padding:12px;">{% if item.is_active %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">{% if item.is_default %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">{{ item.priority_order }}</td>
+                <td style="padding:12px;">
+                  <a class="btn" href="/app/ia/proveedores/{{ item.id }}/editar/">Editar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay proveedores IA configurados.</p>
+    {% endif %}
+  </div>
+{% endblock %}

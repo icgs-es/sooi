@@ -1,0 +1,67 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Usuarios | SOOI{% endblock %}
+{% block section_title %}Usuarios{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Usuarios internos</h1>
+    <p>Gestión básica de usuarios del sistema.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/configuracion/">Volver a configuración</a>
+      {% if can_manage_users %}
+        <a class="btn" href="/app/usuarios/nuevo/">Nuevo usuario</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    {% if items %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Usuario</th>
+              <th style="padding:12px;">Nombre</th>
+              <th style="padding:12px;">Email</th>
+              <th style="padding:12px;">Activo</th>
+              <th style="padding:12px;">Staff</th>
+              <th style="padding:12px;">Superusuario</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
+                <td style="padding:12px; font-weight:600;">{{ item.username }}</td>
+                <td style="padding:12px;">
+                  {% if item.first_name or item.last_name %}
+                    {{ item.first_name }} {{ item.last_name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.email|default:"—" }}</td>
+                <td style="padding:12px;">{% if item.is_active %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">{% if item.is_staff %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">{% if item.is_superuser %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <a class="btn" href="/app/usuarios/{{ item.id }}/editar/">Editar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:16px; color:#64748b;">Todavía no hay usuarios para mostrar.</p>
+
+      {% if can_manage_users %}
+        <div class="actions">
+          <a class="btn" href="/app/usuarios/nuevo/">Crear primer usuario</a>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}

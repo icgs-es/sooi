@@ -1,0 +1,62 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Fuentes | SOOI{% endblock %}
+{% block section_title %}Fuentes{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Fuentes</h1>
+    <p>Gestión interna de fuentes reales de captación.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/configuracion/">Volver a configuración</a>
+      <a class="btn" href="/app/fuentes/nueva/">Nueva fuente</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    {% if items %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Nombre</th>
+              <th style="padding:12px;">Código</th>
+              <th style="padding:12px;">Tipo</th>
+              <th style="padding:12px;">URL base</th>
+              <th style="padding:12px;">Activa</th>
+              <th style="padding:12px;">Verificada</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
+                <td style="padding:12px; font-weight:600;">{{ item.name }}</td>
+                <td style="padding:12px;">{{ item.code }}</td>
+                <td style="padding:12px;">{{ item.get_source_type_display }}</td>
+                <td style="padding:12px;">
+                  {% if item.base_url %}
+                    <a href="{{ item.base_url }}" target="_blank" rel="noopener">{{ item.base_url }}</a>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{% if item.is_active %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">{% if item.is_verified %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <a class="btn" href="/app/fuentes/{{ item.id }}/editar/">Editar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:16px; color:#64748b;">Todavía no hay fuentes registradas.</p>
+      <div class="actions">
+        <a class="btn" href="/app/fuentes/nueva/">Crear primera fuente</a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

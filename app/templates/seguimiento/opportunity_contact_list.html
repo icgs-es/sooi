@@ -1,0 +1,79 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Contactos | SOOI{% endblock %}
+{% block section_title %}Contactos{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Contactos</h1>
+    <p>Alta y gestión básica de contactos para seguimiento de oportunidades.</p>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Nuevo contacto</h1>
+
+      <form method="post" style="margin-top:14px;">
+        {% csrf_token %}
+
+        <div style="display:grid; grid-template-columns:1fr; gap:14px;">
+          <div>
+            <label><strong>Nombre completo</strong></label>
+            {{ form.full_name }}
+            {{ form.full_name.errors }}
+          </div>
+
+          <div>
+            <label><strong>Teléfono</strong></label>
+            {{ form.phone }}
+            {{ form.phone.errors }}
+          </div>
+
+          <div>
+            <label><strong>Email</strong></label>
+            {{ form.email }}
+            {{ form.email.errors }}
+          </div>
+
+          <div>
+            <label><strong>Rol</strong></label>
+            {{ form.role }}
+            {{ form.role.errors }}
+          </div>
+
+          <div>
+            <label><strong>Canal preferido</strong></label>
+            {{ form.preferred_channel }}
+            {{ form.preferred_channel.errors }}
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <button class="btn" type="submit">Guardar contacto</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Listado actual</h1>
+
+      {% if items %}
+        <div style="margin-top:14px;">
+          {% for item in items %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ item.full_name }}</div>
+              <div style="margin-top:4px; color:#64748b; font-size:14px;">
+                {{ item.phone|default:"—" }} · {{ item.email|default:"—" }}
+              </div>
+              <div style="margin-top:4px; color:#64748b; font-size:14px;">
+                {{ item.get_role_display }} · {{ item.get_preferred_channel_display }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Aún no hay contactos registrados.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

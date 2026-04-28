@@ -1,0 +1,231 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Bandeja de Captación | SOOI{% endblock %}
+{% block section_title %}Bandeja de Captación{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Bandeja de Captación</h1>
+    <p>Entrada operativa de inmuebles captados. Aquí comienza el filtro real entre ruido y oportunidad.</p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/app/captacion/manual/">Alta manual</a>
+      <a class="btn" href="/app/">Volver al panel</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Búsqueda</label>
+        <select name="search_profile_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:220px;">
+          <option value="">Todas</option>
+          {% for search in available_search_profiles %}
+            <option value="{{ search.id }}" {% if current_search_profile_id == search.id|stringformat:"s" %}selected{% endif %}>
+              {{ search.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
+        <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todos</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Operación</label>
+        <select name="operation_type" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todas</option>
+          {% for value, label in operation_type_choices %}
+            <option value="{{ value }}" {% if current_operation_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Tipología</label>
+        <select name="property_type" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todas</option>
+          {% for value, label in property_type_choices %}
+            <option value="{{ value }}" {% if current_property_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Método</label>
+        <select name="entry_mode" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todos</option>
+          {% for value, label in entry_mode_choices %}
+            <option value="{{ value }}" {% if current_entry_mode == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Fuente</label>
+        <select name="source_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="">Todas</option>
+          {% for source in available_sources %}
+            <option value="{{ source.id }}" {% if current_source_id == source.id|stringformat:"s" %}selected{% endif %}>
+              {{ source.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+        <a class="btn" href="/app/captacion/">Limpiar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    {% if captured_properties %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Fecha</th>
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Método</th>
+              <th style="padding:12px;">Fuente</th>
+              <th style="padding:12px;">Ubicación</th>
+              <th style="padding:12px;">Operación</th>
+              <th style="padding:12px;">Tipo</th>
+              <th style="padding:12px;">Precio</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Interés</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in captured_properties %}
+              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
+                <td style="padding:12px; white-space:nowrap;">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px;">
+                  {% if item.search_profile %}
+                    <span style="
+                      display:inline-flex;
+                      align-items:center;
+                      padding:4px 9px;
+                      border-radius:999px;
+                      font-size:12px;
+                      font-weight:700;
+                      border:1px solid #cbd5e1;
+                      {% if item.search_profile.color == 'blue' %}background:#eff6ff; color:#1d4ed8;{% endif %}
+                      {% if item.search_profile.color == 'green' %}background:#ecfdf5; color:#047857;{% endif %}
+                      {% if item.search_profile.color == 'orange' %}background:#fff7ed; color:#c2410c;{% endif %}
+                      {% if item.search_profile.color == 'purple' %}background:#f5f3ff; color:#6d28d9;{% endif %}
+                      {% if item.search_profile.color == 'red' %}background:#fef2f2; color:#b91c1c;{% endif %}
+                      {% if item.search_profile.color == 'teal' %}background:#f0fdfa; color:#0f766e;{% endif %}
+                    ">
+                      {{ item.search_profile.name }}
+                    </span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/captacion/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.title }}
+                  </a>
+
+                  {% if item.possible_duplicate %}
+                    <div style="margin-top:6px;">
+                      <span style="
+                        display:inline-flex;
+                        align-items:center;
+                        padding:4px 8px;
+                        border-radius:999px;
+                        background:#fff7ed;
+                        color:#9a3412;
+                        font-size:12px;
+                        font-weight:700;
+                        border:1px solid #fdba74;
+                      ">
+                        Posible duplicado
+                      </span>
+                    </div>
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.get_entry_mode_display }}</td>
+                <td style="padding:12px;">{{ item.source.name }}</td>
+                <td style="padding:12px;">
+                  {% if item.municipality or item.province %}
+                    {{ item.municipality }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.get_operation_type_display }}</td>
+                <td style="padding:12px;">{{ item.get_property_type_display }}</td>
+                <td style="padding:12px;">
+                  {% if item.price %}{{ item.price }} €{% else %}—{% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{% if item.is_interesting %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <details class="action-menu">
+                    <summary class="action-menu__trigger">⋯</summary>
+
+                    <div class="action-menu__panel">
+                      <a class="action-menu__item" href="/app/captacion/{{ item.id }}/">Abrir</a>
+
+                      {% if not item.is_interesting %}
+                        <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
+                          {% csrf_token %}
+                          <button class="action-menu__item" type="submit">Interesante</button>
+                        </form>
+                      {% endif %}
+
+                      {% if item.status != "in_review" %}
+                        <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/">
+                          {% csrf_token %}
+                          <button class="action-menu__item" type="submit">En revisión</button>
+                        </form>
+                      {% endif %}
+
+                      {% if not item.existing_opportunity %}
+                        <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
+                          {% csrf_token %}
+                          <button class="action-menu__item action-menu__item--danger" type="submit">
+                            Eliminar
+                          </button>
+                        </form>
+                      {% endif %}
+                      
+                      {% if item.existing_opportunity %}
+                        <a class="action-menu__item action-menu__item--primary" href="/app/oportunidades/{{ item.existing_opportunity.id }}/">
+                          Ver oportunidad
+                        </a>
+                      {% else %}
+                        <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
+                          {% csrf_token %}
+                          <button class="action-menu__item action-menu__item--primary" type="submit">Convertir</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </details>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:16px; color:#64748b;">Todavía no hay inmuebles captados para mostrar.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/app/captacion/manual/">Crear primer inmueble</a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

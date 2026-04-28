@@ -1,0 +1,21 @@
+{% if search_profile %}
+  <span style="
+    display:inline-flex;
+    align-items:center;
+    padding:4px 9px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    border:1px solid #cbd5e1;
+    {% if search_profile.color == 'blue' %}background:#eff6ff; color:#1d4ed8;{% endif %}
+    {% if search_profile.color == 'green' %}background:#ecfdf5; color:#047857;{% endif %}
+    {% if search_profile.color == 'orange' %}background:#fff7ed; color:#c2410c;{% endif %}
+    {% if search_profile.color == 'purple' %}background:#f5f3ff; color:#6d28d9;{% endif %}
+    {% if search_profile.color == 'red' %}background:#fef2f2; color:#b91c1c;{% endif %}
+    {% if search_profile.color == 'teal' %}background:#f0fdfa; color:#0f766e;{% endif %}
+  ">
+    {{ search_profile.name }}
+  </span>
+{% else %}
+  —
+{% endif %}

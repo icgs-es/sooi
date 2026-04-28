@@ -1,0 +1,85 @@
+name: sooi
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sooi_db
+    restart: unless-stopped
+    env_file:
+      - ./env/dev.env
+    volumes:
+      - sooi_postgres_data:/var/lib/postgresql/data
+    networks:
+      - sooi_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: sooi_redis
+    restart: unless-stopped
+    networks:
+      - sooi_net
+
+  web:
+    build:
+      context: ../
+      dockerfile: infra/django/Dockerfile
+    container_name: sooi_web
+    restart: unless-stopped
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 180 --graceful-timeout 30"
+    env_file:
+      - ./env/dev.env
+    volumes:
+      - ../app:/app
+      - sooi_static:/vol/static
+      - sooi_media:/vol/media
+    depends_on:
+      - db
+      - redis
+    networks:
+      sooi_net:
+      ordix_internal:
+        aliases:
+          - sooi_web
+
+  worker:
+    build:
+      context: ../
+      dockerfile: infra/django/Dockerfile
+    container_name: sooi_worker
+    restart: unless-stopped
+    command: celery -A config worker -l info
+    env_file:
+      - ./env/dev.env
+    volumes:
+      - ../app:/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - sooi_net
+
+  caddy:
+    image: caddy:2
+    container_name: sooi_caddy
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - sooi_static:/srv/static:ro
+      - sooi_media:/srv/media:ro
+    depends_on:
+      - web
+    networks:
+      - sooi_net
+      - ordix_internal
+
+volumes:
+  sooi_postgres_data:
+  sooi_static:
+  sooi_media:
+
+networks:
+  sooi_net:
+  ordix_internal:
+    external: true

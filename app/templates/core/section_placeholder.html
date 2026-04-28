@@ -1,0 +1,16 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}{{ section_title }} | SOOI{% endblock %}
+{% block section_title %}{{ section_title }}{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ section_title }}</h1>
+    <p>{{ section_description }}</p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/app/">Volver al panel</a>
+      <a class="btn" href="/admin/">Abrir admin</a>
+    </div>
+  </div>
+{% endblock %}

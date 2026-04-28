@@ -1,0 +1,114 @@
+{% extends "core/base_public.html" %}
+
+{% block title %}Acceder | SOOI{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:40px 20px;">
+  <div style="width:100%; max-width:520px;">
+    <div style="background:#ffffff; border:1px solid #dbe3ee; border-radius:24px; padding:28px; box-shadow:0 10px 30px rgba(15,23,42,.06);">
+      
+      <div style="text-align:center; margin-bottom:24px;">
+        {% if system_settings and system_settings.login_logo %}
+          <div style="margin-bottom:16px;">
+            <img
+              src="{{ system_settings.login_logo.url }}"
+              alt="{{ system_settings.company_name|default:'SOOI' }}"
+              style="max-height:86px; width:auto; display:block; margin:0 auto;"
+            >
+          </div>
+        {% elif system_settings and system_settings.logo %}
+          <div style="margin-bottom:16px;">
+            <img
+              src="{{ system_settings.logo.url }}"
+              alt="{{ system_settings.company_name|default:'SOOI' }}"
+              style="max-height:86px; width:auto; display:block; margin:0 auto;"
+            >
+          </div>
+        {% endif %}
+
+        <div style="font-size:13px; color:#64748b; margin-bottom:8px;">
+          Acceso al sistema
+        </div>
+
+        <h1 style="margin:0; font-size:36px; line-height:1.1; color:#0f172a;">
+          {{ system_settings.company_name|default:"SOOI" }}
+        </h1>
+
+        <p style="margin:12px 0 0 0; color:#64748b; font-size:16px;">
+          Inicia sesión para acceder a tu espacio de trabajo.
+        </p>
+      </div>
+
+      {% if form.errors %}
+        <div style="margin-bottom:18px; padding:12px 14px; border:1px solid #fecaca; background:#fef2f2; color:#991b1b; border-radius:12px;">
+          Usuario o contraseña incorrectos.
+        </div>
+      {% endif %}
+
+      <form method="post" action="" style="display:grid; gap:16px;">
+        {% csrf_token %}
+
+        <div>
+          <label for="{{ form.username.id_for_label }}" style="display:block; margin-bottom:6px; font-weight:600; color:#0f172a;">
+            Usuario
+          </label>
+          {{ form.username }}
+        </div>
+
+        <div>
+          <label for="{{ form.password.id_for_label }}" style="display:block; margin-bottom:6px; font-weight:600; color:#0f172a;">
+            Contraseña
+          </label>
+          {{ form.password }}
+        </div>
+
+        {% if next %}
+          <input type="hidden" name="next" value="{{ next }}">
+        {% endif %}
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:4px;">
+          <button
+            type="submit"
+            style="display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:0 18px; border:none; border-radius:12px; background:#0f172a; color:#fff; font-weight:700; font-size:15px; cursor:pointer;"
+          >
+            Entrar
+          </button>
+
+          <a
+            href="/"
+            style="display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:0 18px; border:1px solid #cbd5e1; border-radius:12px; background:#fff; color:#0f172a; font-weight:600; font-size:15px; text-decoration:none;"
+          >
+            Volver
+          </a>
+        </div>
+      </form>
+    </div>
+
+    <div style="text-align:center; margin-top:18px; color:#64748b; font-size:13px;">
+      <strong style="color:#0f172a;">SOOI</strong> · Sistema Operativo de Oportunidades Inmobiliarias
+    </div>
+  </div>
+</div>
+
+<style>
+  #id_username,
+  #id_password {
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 12px;
+    border: 1px solid #dbe3ee;
+    border-radius: 12px;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+    box-sizing: border-box;
+  }
+
+  #id_username:focus,
+  #id_password:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  }
+</style>
+{% endblock %}

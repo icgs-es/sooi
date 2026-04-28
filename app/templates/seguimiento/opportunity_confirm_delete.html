@@ -1,0 +1,31 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Eliminar oportunidad | SOOI{% endblock %}
+{% block section_title %}Eliminar oportunidad{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Eliminar oportunidad</h1>
+    <p>Vas a eliminar esta oportunidad del sistema.</p>
+
+    <div style="margin-top:18px; padding:16px; border:1px solid #fecaca; background:#fff1f2; border-radius:12px;">
+      <div><strong>Título:</strong> {{ item.title }}</div>
+      <div style="margin-top:6px;"><strong>Estado:</strong> {{ item.get_status_display }}</div>
+      <div style="margin-top:6px;"><strong>Fuente:</strong> {{ item.source_name|default:"—" }}</div>
+    </div>
+
+    <p style="margin-top:18px; color:#991b1b;">
+      Esta acción elimina la oportunidad. La captación origen no se borra.
+    </p>
+
+    <form method="post" style="margin-top:18px;">
+      {% csrf_token %}
+      <div class="actions">
+        <button class="btn" type="submit" style="border-color:#dc2626; color:#dc2626;">
+          Sí, eliminar oportunidad
+        </button>
+        <a class="btn" href="/app/oportunidades/{{ item.id }}/">Cancelar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

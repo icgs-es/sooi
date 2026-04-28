@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SOOI{% endblock %}</title>
+  <style>
+    :root{
+      --bg:#f4f7fb;
+      --surface:#ffffff;
+      --line:#dbe3ee;
+      --text:#18212b;
+      --muted:#64748b;
+      --primary:#0f172a;
+      --accent:#2563eb;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial, sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .app{
+      display:grid;
+      grid-template-columns:260px 1fr;
+      min-height:100vh;
+    }
+    .sidebar{
+      background:var(--primary);
+      color:#fff;
+      padding:24px 18px;
+      display:flex;
+      flex-direction:column;
+      height:100vh;
+      position:sticky;
+      top:0;
+      overflow-y:auto;
+    }
+    .brand{
+      font-size:30px;
+      font-weight:700;
+      margin:0 0 6px;
+      letter-spacing:.5px;
+    }
+    .brand-sub{
+      margin:0 0 24px;
+      color:#cbd5e1;
+      font-size:13px;
+      line-height:1.4;
+    }
+    .nav{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .nav a{
+      color:#e2e8f0;
+      text-decoration:none;
+      padding:10px 12px;
+      border-radius:10px;
+      display:block;
+    }
+    .nav a:hover{
+      background:rgba(255,255,255,.08);
+    }
+    .main{
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+    }
+    .topbar{
+      background:var(--surface);
+      border-bottom:1px solid var(--line);
+      padding:16px 24px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .topbar strong{
+      font-size:18px;
+    }
+    .topbar .user{
+      color:var(--muted);
+      font-size:14px;
+    }
+    .content{
+      padding:24px;
+    }
+    .page-card{
+      background:var(--surface);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:24px;
+    }
+    .page-card h1{
+      margin:0 0 8px;
+      font-size:28px;
+    }
+    .page-card p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.5;
+    }
+    .quick-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:16px;
+      margin-top:20px;
+    }
+    .quick-card{
+      background:#f8fafc;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:18px;
+    }
+    .quick-card h3{
+      margin:0 0 6px;
+      font-size:16px;
+    }
+    .quick-card p{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .actions{
+      margin-top:22px;
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .btn{
+      display:inline-block;
+      padding:11px 16px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:600;
+      border:1px solid var(--primary);
+      color:var(--primary);
+      background:#fff;
+    }
+    .btn-primary{
+      background:var(--primary);
+      color:#fff;
+    }
+    @media (max-width: 960px){
+      .app{grid-template-columns:1fr}
+      .sidebar{display:none}
+      .quick-grid{grid-template-columns:1fr}
+    }
+    /* ===== Action menu shared ===== */
+
+    .action-menu {
+      position: relative;
+      display: inline-block;
+    }
+
+    .action-menu summary {
+      list-style: none;
+    }
+
+    .action-menu summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .action-menu__trigger {
+      width: 38px;
+      height: 38px;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      background: #ffffff;
+      cursor: pointer;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 36px;
+      text-align: center;
+      color: #18212b;
+      transition: all 0.18s ease;
+    }
+
+    .action-menu__trigger:hover {
+      border-color: #cbd5e1;
+      background: #f8fafc;
+    }
+
+    .action-menu[open] .action-menu__panel {
+      display: flex;
+    }
+
+    .action-menu__panel {
+      display: none;
+      position: absolute;
+      right: 44px;
+      top: 50%;
+      transform: translateY(-50%);
+      min-width: max-content;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: #ffffff;
+      border: 1px solid #dbe3ee;
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+      z-index: 300;
+    }
+
+    .action-menu__panel form {
+      margin: 0;
+      display: inline-block;
+    }
+
+    .action-menu__item {
+      display: inline-block;
+      width: auto;
+      padding: 10px 12px;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #18212b;
+      text-decoration: none;
+      font: inherit;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.18s ease;
+    }
+
+    .action-menu__item:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .action-menu__item--primary {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    .action-menu__item--primary:hover {
+      background: #1e293b;
+      border-color: #1e293b;
+    }
+
+    .action-menu__item--danger {
+      background: #ffffff;
+      border-color: #fecaca;
+      color: #b91c1c;
+    }
+
+    .action-menu__item--danger:hover {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+    /* --- Base UI forms --- */
+    .page-card label{
+      display:block;
+      margin-bottom:6px;
+      font-weight:600;
+      color:var(--text);
+    }
+
+    .page-card input[type="text"],
+    .page-card input[type="email"],
+    .page-card input[type="number"],
+    .page-card input[type="date"],
+    .page-card input[type="datetime-local"],
+    .page-card input[type="url"],
+    .page-card select,
+    .page-card textarea{
+      width:100%;
+      min-height:44px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fff;
+      color:var(--text);
+      font:inherit;
+      outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+    .page-card textarea{
+      min-height:120px;
+      resize:vertical;
+    }
+
+    .page-card input:focus,
+    .page-card select:focus,
+    .page-card textarea:focus{
+      border-color:var(--accent);
+      box-shadow:0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    .page-card .errorlist{
+      margin:6px 0 0 0;
+      padding:0;
+      list-style:none;
+      color:#b91c1c;
+      font-size:13px;
+    }
+
+    .page-card .helptext{
+      display:block;
+      margin-top:6px;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      align-items:center;
+    }
+
+    .btn,
+    .page-card button[type="submit"]{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:44px;
+      padding:0 16px;
+      border:1px solid #0f172a;
+      border-radius:12px;
+      background:#fff;
+      color:#0f172a;
+      font-weight:600;
+      font-size:15px;
+      text-decoration:none;
+      cursor:pointer;
+    }
+
+    .btn:hover,
+    .page-card button[type="submit"]:hover{
+      background:#f8fafc;
+    }
+
+    .page-card button[type="submit"]{
+      background:#0f172a;
+      color:#fff;
+    }
+
+    .page-card button[type="submit"]:hover{
+      background:#1e293b;
+    }
+
+    .quick-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:18px;
+    }
+
+    @media (max-width: 980px){
+      .quick-grid{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      {% if system_settings and system_settings.logo %}
+        <a href="/app/" style="display:block; margin:0 0 24px 0; text-decoration:none;">
+          <img
+            src="{{ system_settings.logo.url }}"
+            alt="{{ system_settings.company_name|default:'SOOI' }}"
+            style="
+              display:block;
+              width:100%;
+              max-width:100%;
+              height:auto;
+              margin:0 auto;
+            "
+          >
+        </a>
+      {% else %}
+        <a href="/app/" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; margin-bottom:18px;">
+          <div style="
+            width:44px;
+            height:44px;
+            border-radius:12px;
+            background:#0f172a;
+            color:#fff;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:700;
+            font-size:18px;
+          ">
+            S
+          </div>
+
+          <div style="display:flex; flex-direction:column; min-width:0;">
+            <strong style="font-size:15px; line-height:1.2;">
+              {{ system_settings.company_name|default:"SOOI" }}
+            </strong>
+            <span style="font-size:12px; color:#cbd5e1;">
+              Sistema operativo inmobiliario
+            </span>
+          </div>
+        </a>
+      {% endif %}
+
+      <nav class="nav">
+        <a href="/app/">Panel</a>
+        <a href="/app/busquedas/">Búsquedas</a>
+        <a href="/app/captacion/">Bandeja de Captación</a>
+        <a href="/app/oportunidades/">Oportunidades</a>
+        <a href="/app/tareas/">Tareas</a>
+        <a href="/app/alertas/">Alertas</a>
+        <a href="/app/comercializadoras/">Comercializadoras</a>
+        <a href="/app/contactos-oportunidad/">Contactos</a>
+        <a href="/app/configuracion/">Configuración</a>
+      </nav>
+
+      <div style="margin-top:auto; padding-top:24px; border-top:1px solid rgba(255,255,255,.10);">
+        <div style="font-size:12px; font-weight:700; letter-spacing:.04em; color:#e2e8f0;">
+          SOOI
+        </div>
+        <div style="margin-top:4px; font-size:11px; line-height:1.4; color:#94a3b8;">
+          Sistema Operativo de Oportunidades Inmobiliarias
+        </div>
+      </div>
+      
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <strong>{% block section_title %}SOOI{% endblock %}</strong>
+        <div class="user" style="display:flex; align-items:center; gap:10px;">
+          <span>{{ request.user.username }}</span>
+
+          <form method="post" action="/accounts/logout/" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="/accounts/login/">
+            <button
+              type="submit"
+              style="
+                background:none;
+                border:none;
+                padding:0;
+                margin:0;
+                color:#0f172a;
+                cursor:pointer;
+                font:inherit;
+                text-decoration:underline;
+              "
+            >
+              Salir
+            </button>
+          </form>
+        </div>
+      </header>
+
+      <section class="content">
+        {% if messages %}
+          <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;">
+            {% for message in messages %}
+              <div style="
+                padding:12px 14px;
+                border-radius:12px;
+                border:1px solid #dbe3ee;
+                background:#f8fafc;
+                color:#18212b;
+                font-weight:600;
+              ">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>

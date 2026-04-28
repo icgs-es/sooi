@@ -1,0 +1,47 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Comercializadoras | SOOI{% endblock %}
+{% block section_title %}Comercializadoras{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Comercializadoras</h1>
+    <p>Alta y gestión básica de empresas que comercializan inmuebles.</p>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Nueva comercializadora</h1>
+
+      <form method="post" style="margin-top:14px;">
+        {% csrf_token %}
+
+        <div>
+          <label><strong>Nombre</strong></label>
+          {{ form.name }}
+          {{ form.name.errors }}
+        </div>
+
+        <div style="margin-top:14px;">
+          <button class="btn" type="submit">Guardar comercializadora</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Listado actual</h1>
+
+      {% if items %}
+        <div style="margin-top:14px;">
+          {% for item in items %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ item.name }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Aún no hay comercializadoras registradas.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

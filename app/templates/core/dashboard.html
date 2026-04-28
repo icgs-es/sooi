@@ -1,0 +1,143 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Panel | SOOI{% endblock %}
+{% block section_title %}Panel{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Panel de SOOI</h1>
+    <p>Vista operativa inicial con métricas reales del sistema.</p>
+  </div>
+
+  <div class="quick-grid" style="margin-top: 18px;">
+    <div class="quick-card">
+      <h3>Búsquedas</h3>
+      <p><strong>{{ stats.search_profiles }}</strong> perfiles guardados</p>
+    </div>
+    <div class="quick-card">
+      <h3>Captación</h3>
+      <p><strong>{{ stats.captured_properties }}</strong> inmuebles captados</p>
+      <p><strong>{{ stats.captured_pending }}</strong> pendientes de revisar</p>
+    </div>
+    <div class="quick-card">
+      <h3>Oportunidades</h3>
+      <p><strong>{{ stats.opportunities }}</strong> totales</p>
+      <p><strong>{{ stats.opportunities_active }}</strong> activas</p>
+    </div>
+    <div class="quick-card">
+      <h3>Tareas</h3>
+      <p><strong>{{ stats.tasks_open }}</strong> abiertas / en progreso</p>
+    </div>
+    <div class="quick-card">
+      <h3>Alertas</h3>
+      <p><strong>{{ stats.alerts_new }}</strong> nuevas</p>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top: 18px;">
+    <a class="btn btn-primary" href="/app/busquedas/nuevo/">Nueva búsqueda</a>
+    <a class="btn" href="/app/captacion/">Abrir captación</a>
+    <a class="btn" href="/app/oportunidades/">Ver oportunidades</a>
+    <a class="btn" href="/app/configuracion/">Configuración</a>
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    <h1 style="font-size:22px;">Últimos inmuebles captados</h1>
+    {% if recent_captured %}
+      <div style="overflow:auto; margin-top: 14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Fecha</th>
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Fuente</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Precio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in recent_captured %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px;">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px; font-weight:600;">{{ item.title }}</td>
+                <td style="padding:12px;">{{ item.source.name }}</td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay captaciones.</p>
+    {% endif %}
+  </div>
+
+  <div class="page-card" style="margin-top: 18px;">
+    <h1 style="font-size:22px;">Últimas oportunidades</h1>
+    {% if recent_opportunities %}
+      <div style="overflow:auto; margin-top: 14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Prioridad</th>
+              <th style="padding:12px;">Siguiente acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in recent_opportunities %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; font-weight:600;">{{ item.title }}</td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{{ item.get_priority_display }}</td>
+                <td style="padding:12px;">{{ item.next_action|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay oportunidades.</p>
+    {% endif %}
+  </div>
+
+  <div class="quick-grid" style="margin-top: 18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Tareas recientes</h1>
+      {% if recent_tasks %}
+        <div style="margin-top: 14px;">
+          {% for item in recent_tasks %}
+            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ item.title }}</div>
+              <div style="color:#64748b; font-size:14px;">
+                {{ item.get_status_display }} · {{ item.get_priority_display }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Sin tareas.</p>
+      {% endif %}
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Alertas recientes</h1>
+      {% if recent_alerts %}
+        <div style="margin-top: 14px;">
+          {% for item in recent_alerts %}
+            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:600;">{{ item.title }}</div>
+              <div style="color:#64748b; font-size:14px;">
+                {{ item.get_alert_type_display }} · {{ item.get_severity_display }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">Sin alertas.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

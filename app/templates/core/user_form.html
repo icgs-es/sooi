@@ -1,0 +1,95 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}
+  {% if item %}Editar usuario{% else %}Nuevo usuario{% endif %} | SOOI
+{% endblock %}
+
+{% block section_title %}
+  {% if item %}Editar usuario{% else %}Nuevo usuario{% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    {% if item %}
+      <h1>Editar usuario</h1>
+      <p>Actualiza los datos básicos del usuario interno.</p>
+    {% else %}
+      <h1>Nuevo usuario</h1>
+      <p>Alta interna de usuario para acceso al sistema.</p>
+    {% endif %}
+
+    <div class="actions">
+      <a class="btn" href="/app/usuarios/">Volver a usuarios</a>
+    </div>
+  </div>
+
+  <form method="post" style="margin-top:18px;">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="page-card" style="margin-bottom:18px; border:1px solid #fecaca; background:#fff1f2;">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Datos del usuario</h1>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px;">
+        <div>
+          <label><strong>{{ form.username.label }}</strong></label>
+          {{ form.username }}
+          {{ form.username.errors }}
+        </div>
+
+        <div>
+          <label><strong>{{ form.email.label }}</strong></label>
+          {{ form.email }}
+          {{ form.email.errors }}
+        </div>
+
+        <div>
+          <label><strong>{{ form.first_name.label }}</strong></label>
+          {{ form.first_name }}
+          {{ form.first_name.errors }}
+        </div>
+
+        <div>
+          <label><strong>{{ form.last_name.label }}</strong></label>
+          {{ form.last_name }}
+          {{ form.last_name.errors }}
+        </div>
+
+        {% if form.password1 %}
+          <div>
+            <label><strong>{{ form.password1.label }}</strong></label>
+            {{ form.password1 }}
+            {{ form.password1.errors }}
+          </div>
+
+          <div>
+            <label><strong>{{ form.password2.label }}</strong></label>
+            {{ form.password2 }}
+            {{ form.password2.errors }}
+          </div>
+        {% endif %}
+
+        {% if form.is_active %}
+          <div style="grid-column:1 / -1;">
+            <label style="display:flex; align-items:center; gap:10px; margin:0;">
+              {{ form.is_active }}
+              <span><strong>{{ form.is_active.label }}</strong></span>
+            </label>
+            {{ form.is_active.errors }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="page-card" style="margin-top:18px;">
+      <button class="btn" type="submit">
+        {% if item %}Guardar cambios{% else %}Guardar usuario{% endif %}
+      </button>
+    </div>
+  </form>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Detalle búsqueda | SOOI{% endblock %}
+{% block section_title %}Detalle de búsqueda{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ profile.name }}</h1>
+    <p>Expediente operativo de búsqueda: captaciones, oportunidades, ejecuciones y desenlace.</p>
+
+    <div style="margin-top:10px;">
+      {% include "seguimiento/_search_badge.html" with search_profile=profile %}
+    </div>
+
+    <div class="actions" style="margin-top:18px;">
+      <a class="btn" href="/app/busquedas/">Volver a búsquedas</a>
+      <a class="btn" href="/app/busquedas/{{ profile.id }}/editar/">Editar búsqueda</a>
+      <a class="btn" href="/app/captacion/?search_profile_id={{ profile.id }}">Ver captaciones</a>
+      <a class="btn" href="/app/oportunidades/?search_profile_id={{ profile.id }}">Ver oportunidades</a>
+
+      {% if profile.status == "active" %}
+      <form id="run-search-form" method="post" action="/app/busquedas/{{ profile.id }}/ejecutar/" style="display:inline-flex; align-items:center; gap:12px;">
+        {% csrf_token %}
+        <button id="run-search-btn" class="btn btn-primary" type="submit">
+          Ejecutar búsqueda
+        </button>
+
+        <span id="run-search-status" style="
+          display:none;
+          padding:8px 12px;
+          border-radius:10px;
+          background:#eff6ff;
+          border:1px solid #bfdbfe;
+          color:#1d4ed8;
+          font-weight:600;
+          white-space:nowrap;
+        ">
+          Exploración profunda en curso…
+        </span>
+      </form>
+
+      <form method="post" action="/app/busquedas/{{ profile.id }}/pausar/" style="display:inline;">
+        {% csrf_token %}
+        <button class="btn" type="submit">Pausar</button>
+      </form>
+
+      <form method="post" action="/app/busquedas/{{ profile.id }}/cerrar-desierta/" style="display:inline;" onsubmit="return confirm('¿Cerrar esta búsqueda como desierta? Se conservará el histórico y se liberará su color.');">
+        {% csrf_token %}
+        <button class="btn" type="submit">Cerrar desierta</button>
+      </form>
+      {% elif profile.status == "paused" %}
+      <form method="post" action="/app/busquedas/{{ profile.id }}/reactivar/" style="display:inline;">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Reactivar</button>
+      </form>
+
+      <form method="post" action="/app/busquedas/{{ profile.id }}/cerrar-desierta/" style="display:inline;" onsubmit="return confirm('¿Cerrar esta búsqueda como desierta? Se conservará el histórico y se liberará su color.');">
+        {% csrf_token %}
+        <button class="btn" type="submit">Cerrar desierta</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="quick-card">
+      <h3>Estado</h3>
+      <p>{{ profile.get_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Automatización</h3>
+      <p>{% if profile.automation_enabled %}Activada{% else %}Manual{% endif %}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Captaciones</h3>
+      <p>{{ captured_count }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Oportunidades</h3>
+      <p>{{ opportunities_count }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Ejecuciones</h3>
+      <p>{{ runs_count }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Precio máximo</h3>
+      <p>{% if profile.max_price %}{{ profile.max_price }} €{% else %}—{% endif %}</p>
+    </div>
+  </div>
+
+  {% if profile.selected_opportunity %}
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Oportunidad seleccionada</h1>
+    <p style="margin-top:10px;">
+      <a href="/app/oportunidades/{{ profile.selected_opportunity.id }}/" style="font-weight:700; color:inherit;">
+        {{ profile.selected_opportunity.title }}
+      </a>
+    </p>
+    <p style="margin-top:8px; color:#64748b;">{{ profile.outcome_notes }}</p>
+  </div>
+  {% endif %}
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Criterios de búsqueda</h1>
+
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-top:14px;">
+      <div>
+        <strong>Provincia</strong>
+        <p style="margin-top:6px;">{{ profile.province }}</p>
+      </div>
+      <div>
+        <strong>Zona / municipio</strong>
+        <p style="margin-top:6px;">{{ profile.zone|default:"—" }}</p>
+      </div>
+      <div>
+        <strong>Operación</strong>
+        <p style="margin-top:6px;">{{ profile.get_operation_type_display }}</p>
+      </div>
+      <div>
+        <strong>Tipos</strong>
+        <p style="margin-top:6px;">{% if profile.property_types %}{{ profile.property_types_display }}{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Dormitorios mín.</strong>
+        <p style="margin-top:6px;">{% if profile.min_bedrooms %}{{ profile.min_bedrooms }}{% else %}—{% endif %}</p>
+      </div>
+      <div>
+        <strong>Creada</strong>
+        <p style="margin-top:6px;">{{ profile.created_at|date:"d/m/Y H:i" }}</p>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <strong>Texto guía IA</strong>
+        <p style="margin-top:6px; white-space:pre-line;">{{ profile.ai_prompt|default:"—" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Últimas captaciones de esta búsqueda</h1>
+
+    {% if captured_properties %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Fecha</th>
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Fuente</th>
+              <th style="padding:12px;">Ubicación</th>
+              <th style="padding:12px;">Precio</th>
+              <th style="padding:12px;">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in captured_properties %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; white-space:nowrap;">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/captacion/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.title }}
+                  </a>
+                </td>
+                <td style="padding:12px;">{{ item.source.name }}</td>
+                <td style="padding:12px;">{{ item.municipality|default:"—" }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}</td>
+                <td style="padding:12px;">{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay captaciones asociadas a esta búsqueda.</p>
+    {% endif %}
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Oportunidades de esta búsqueda</h1>
+
+    {% if opportunities %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Título</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Prioridad</th>
+              <th style="padding:12px;">Precio actual</th>
+              <th style="padding:12px;">Contacto</th>
+              <th style="padding:12px;">Comercializadora</th>
+              <th style="padding:12px;">Desenlace</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in opportunities %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/oportunidades/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.title }}
+                  </a>
+                </td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{{ item.get_priority_display }}</td>
+                <td style="padding:12px;">{% if item.asking_price_current %}{{ item.asking_price_current }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.main_contact %}{{ item.main_contact.full_name }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.broker_company %}{{ item.broker_company.name }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">
+                  {% if profile.selected_opportunity_id == item.id %}
+                    <strong>Seleccionada</strong>
+                  {% elif profile.status == "active" or profile.status == "paused" %}
+                    <form method="post" action="/app/busquedas/{{ profile.id }}/cerrar-con-oportunidad/{{ item.id }}/" onsubmit="return confirm('¿Cerrar esta búsqueda con esta oportunidad seleccionada?');">
+                      {% csrf_token %}
+                      <button class="btn" type="submit">Cerrar con esta oportunidad</button>
+                    </form>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay oportunidades asociadas a esta búsqueda.</p>
+    {% endif %}
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Últimas ejecuciones</h1>
+
+    {% if runs %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Fecha</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Modo</th>
+              <th style="padding:12px;">Proveedor</th>
+              <th style="padding:12px;">Modelo</th>
+              <th style="padding:12px;">Candidatos</th>
+              <th style="padding:12px;">Válidos</th>
+              <th style="padding:12px;">Nuevos</th>
+              <th style="padding:12px;">Errores</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in runs %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px;">{{ run.created_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px;">{{ run.get_status_display }}</td>
+                <td style="padding:12px;">{{ run.get_execution_mode_display }}</td>
+                <td style="padding:12px;">{{ run.provider|default:"—" }}</td>
+                <td style="padding:12px;">{{ run.model_name|default:"—" }}</td>
+                <td style="padding:12px;">{{ run.total_candidates }}</td>
+                <td style="padding:12px;">{{ run.total_valid_candidates }}</td>
+                <td style="padding:12px;">{{ run.total_new }}</td>
+                <td style="padding:12px;">{{ run.total_errors }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay ejecuciones para esta búsqueda.</p>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById("run-search-form");
+      const button = document.getElementById("run-search-btn");
+      const status = document.getElementById("run-search-status");
+
+      if (!form || !button || !status) return;
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        button.disabled = true;
+        button.textContent = "Explorando...";
+        status.style.display = "inline-block";
+
+        setTimeout(function () {
+          form.submit();
+        }, 150);
+      });
+    })();
+  </script>
+{% endblock %}

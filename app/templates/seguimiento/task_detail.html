@@ -1,0 +1,58 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Detalle tarea | SOOI{% endblock %}
+{% block section_title %}Detalle de tarea{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ item.title }}</h1>
+    <p>Ficha base de tarea de seguimiento.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/tareas/">Volver a tareas</a>
+
+      <a class="btn" href="/app/tareas/{{ item.id }}/eliminar/">Eliminar tarea</a>
+      
+      {% if item.property_opportunity %}
+        <a class="btn" href="/app/oportunidades/{{ item.property_opportunity.id }}/">Ver oportunidad</a>
+      {% endif %}
+
+      {% if item.captured_property %}
+        <a class="btn" href="/app/captacion/{{ item.captured_property.id }}/">Ver inmueble</a>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="quick-card">
+      <h3>Tipo</h3>
+      <p>{{ item.get_task_type_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Estado</h3>
+      <p>{{ item.get_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Prioridad</h3>
+      <p>{{ item.get_priority_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Fecha límite</h3>
+      <p>{% if item.due_date %}{{ item.due_date|date:"d/m/Y H:i" }}{% else %}—{% endif %}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Oportunidad</h3>
+      <p>{% if item.property_opportunity %}{{ item.property_opportunity.title }}{% else %}—{% endif %}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Inmueble</h3>
+      <p>{% if item.captured_property %}{{ item.captured_property.title }}{% else %}—{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Descripción</h1>
+    <p style="margin-top:14px; white-space:pre-line;">{{ item.description|default:"Sin descripción." }}</p>
+  </div>
+{% endblock %}

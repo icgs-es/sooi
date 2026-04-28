@@ -1,0 +1,215 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Búsquedas | SOOI{% endblock %}
+{% block section_title %}Búsquedas{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Búsquedas / expedientes</h1>
+    <p>Cada búsqueda funciona como un expediente operativo: captaciones, oportunidades, ejecuciones y desenlace.</p>
+
+    <div style="margin-top:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <span style="
+        display:inline-flex;
+        padding:7px 12px;
+        border-radius:999px;
+        background:#f8fafc;
+        border:1px solid #dbe3ee;
+        font-weight:700;
+      ">
+        {{ active_searches_count }}/{{ max_active_searches }} búsquedas activas
+      </span>
+
+      {% if active_searches_count < max_active_searches %}
+        <a class="btn btn-primary" href="/app/busquedas/nuevo/">Nueva búsqueda</a>
+      {% else %}
+        <span style="color:#b45309; font-weight:700;">
+          Límite alcanzado. Cierra una búsqueda para crear otra.
+        </span>
+      {% endif %}
+
+      <a class="btn" href="/app/">Volver al panel</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Activas y pausadas</h1>
+
+    <div id="run-search-list-status" style="
+      display:none;
+      margin-top:12px;
+      margin-bottom:16px;
+      padding:10px 14px;
+      border-radius:10px;
+      background:#eff6ff;
+      border:1px solid #bfdbfe;
+      color:#1d4ed8;
+      font-weight:600;
+    ">
+       Exploración profunda en curso… la IA está revisando varias fuentes.
+    </div>
+
+    {% if active_search_profiles %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Automatización</th>
+              <th style="padding:12px;">Provincia</th>
+              <th style="padding:12px;">Operación</th>
+              <th style="padding:12px;">Tipos</th>
+              <th style="padding:12px;">Precio máximo</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in active_search_profiles %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/busquedas/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {% include "seguimiento/_search_badge.html" with search_profile=item %}
+                  </a>
+                </td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">{% if item.automation_enabled %}Activada{% else %}Manual{% endif %}</td>
+                <td style="padding:12px;">{{ item.province }}</td>
+                <td style="padding:12px;">{{ item.get_operation_type_display }}</td>
+                <td style="padding:12px;">{% if item.property_types %}{{ item.property_types_display }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.max_price %}{{ item.max_price }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <a class="btn" href="/app/busquedas/{{ item.id }}/">Abrir</a>
+
+                  {% if item.status == "active" %}
+                    <form class="js-run-search-form" method="post" action="/app/busquedas/{{ item.id }}/ejecutar/" style="display:inline;">
+                      {% csrf_token %}
+                      <button class="btn btn-primary js-run-search-btn" type="submit">Ejecutar</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">No hay búsquedas activas ni pausadas.</p>
+    {% endif %}
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Histórico de búsquedas</h1>
+
+    {% if historical_search_profiles %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Resultado</th>
+              <th style="padding:12px;">Cierre</th>
+              <th style="padding:12px;">Oportunidad seleccionada</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in historical_search_profiles %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/busquedas/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.name }}
+                  </a>
+                </td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">
+                  {% if item.closed_at %}{{ item.closed_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                </td>
+                <td style="padding:12px;">
+                  {% if item.selected_opportunity %}
+                    <a href="/app/oportunidades/{{ item.selected_opportunity.id }}/" style="color:inherit; font-weight:600;">
+                      {{ item.selected_opportunity.title }}
+                    </a>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">
+                  <a class="btn" href="/app/busquedas/{{ item.id }}/">Ver histórico</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay búsquedas cerradas o archivadas.</p>
+    {% endif %}
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Últimas ejecuciones</h1>
+
+    {% if recent_runs %}
+      <div style="overflow:auto; margin-top:14px;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Fecha</th>
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Encontrados</th>
+              <th style="padding:12px;">Nuevos</th>
+              <th style="padding:12px;">Actualizados</th>
+              <th style="padding:12px;">Errores</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in recent_runs %}
+              <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px;">{{ run.created_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px;">
+                  {% include "seguimiento/_search_badge.html" with search_profile=run.search_profile %}
+                </td>
+                <td style="padding:12px;">{{ run.get_status_display }}</td>
+                <td style="padding:12px;">{{ run.total_found }}</td>
+                <td style="padding:12px;">{{ run.total_new }}</td>
+                <td style="padding:12px;">{{ run.total_updated }}</td>
+                <td style="padding:12px;">{{ run.total_errors }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay ejecuciones registradas.</p>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const forms = document.querySelectorAll(".js-run-search-form");
+      const status = document.getElementById("run-search-list-status");
+
+      if (!forms.length || !status) return;
+
+      forms.forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+
+          const button = form.querySelector(".js-run-search-btn");
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Explorando...";
+          }
+
+          status.style.display = "block";
+
+          setTimeout(function () {
+            form.submit();
+          }, 150);
+        });
+      });
+    })();
+  </script>
+{% endblock %}
