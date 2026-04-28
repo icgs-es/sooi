@@ -1,5 +1,4 @@
 import json
-import os
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -145,7 +144,7 @@ class AIDiscoveryClient:
     provider_name = "ai"
 
     def __init__(self) -> None:
-        self.default_env_model = os.getenv("OPENAI_MODEL", "gpt-5.4").strip()
+        pass
 
     def _get_provider_specs(self) -> list[dict[str, Any]]:
         configs = list(
@@ -166,23 +165,6 @@ class AIDiscoveryClient:
                     "priority_order": cfg.priority_order,
                 }
                 for cfg in configs
-            ]
-
-        env_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        env_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-
-        if env_api_key:
-            return [
-                {
-                    "name": "OpenAI (env)",
-                    "provider_code": "openai",
-                    "model_name": self.default_env_model,
-                    "base_url": env_base_url,
-                    "api_key": env_api_key,
-                    "supports_web_search": True,
-                    "supports_reasoning": True,
-                    "priority_order": 1,
-                }
             ]
 
         return []
