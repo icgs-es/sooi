@@ -82,7 +82,9 @@ class SearchProfileForm(forms.ModelForm):
             "province",
             "zone",
             "property_types",
+            "min_price",
             "max_price",
+            "min_area_m2",
             "min_bedrooms",
             "ai_prompt",
             "automation_enabled",
@@ -93,7 +95,9 @@ class SearchProfileForm(forms.ModelForm):
             "zone": forms.TextInput(
                 attrs={"placeholder": "Ej. Marbella, Estepona, Nueva Andalucía, centro..."}
             ),
-            "max_price": forms.NumberInput(attrs={"step": "0.01"}),
+            "min_price": forms.NumberInput(attrs={"step": "0.01", "placeholder": "Ej. 30000"}),
+            "max_price": forms.NumberInput(attrs={"step": "0.01", "placeholder": "Ej. 80000"}),
+            "min_area_m2": forms.NumberInput(attrs={"step": "0.01", "placeholder": "Ej. 60"}),
             "min_bedrooms": forms.NumberInput(attrs={"min": 0}),
             "ai_prompt": forms.Textarea(
                 attrs={

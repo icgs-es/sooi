@@ -184,7 +184,9 @@ class AIDiscoveryClient:
         province: str,
         zone: str,
         property_types: list[str],
+        min_price: Decimal | None,
         max_price: Decimal | None,
+        min_area_m2: Decimal | None,
         min_bedrooms: int | None,
         ai_prompt: str,
     ) -> list[dict[str, str]]:
@@ -197,8 +199,10 @@ class AIDiscoveryClient:
                 "label": "general-provincia",
                 "focus": (
                     f"Búsqueda general en {province} para {operation_text}, "
-                    f"tipologías {property_types_text}, precio máximo "
-                    f"{max_price if max_price is not None else 'sin definir'}, "
+                    f"tipologías {property_types_text}, precio mínimo "
+                    f"{min_price if min_price is not None else 'sin definir'}, "
+                    f"precio máximo {max_price if max_price is not None else 'sin definir'}, "
+                    f"metros mínimos {min_area_m2 if min_area_m2 is not None else 'sin definir'}, "
                     f"dormitorios mínimos {min_bedrooms if min_bedrooms is not None else 'sin definir'}."
                 ),
             }
@@ -240,6 +244,18 @@ class AIDiscoveryClient:
                 }
             )
 
+        if min_price is not None:
+            variants.append(
+                {
+                    "label": "precio-minimo",
+                    "focus": (
+                        f"Búsqueda estricta de oportunidades por encima de "
+                        f"{min_price} euros en {province}"
+                        f"{f' y zona {zone_text}' if zone_text else ''}."
+                    ),
+                }
+            )
+
         if max_price is not None:
             variants.append(
                 {
@@ -247,6 +263,18 @@ class AIDiscoveryClient:
                     "focus": (
                         f"Búsqueda muy estricta de oportunidades por debajo de "
                         f"{max_price} euros en {province}"
+                        f"{f' y zona {zone_text}' if zone_text else ''}."
+                    ),
+                }
+            )
+
+        if min_area_m2 is not None:
+            variants.append(
+                {
+                    "label": "metros-minimos",
+                    "focus": (
+                        f"Búsqueda estricta de inmuebles con al menos "
+                        f"{min_area_m2} m² en {province}"
                         f"{f' y zona {zone_text}' if zone_text else ''}."
                     ),
                 }
@@ -272,7 +300,9 @@ class AIDiscoveryClient:
         province: str,
         zone: str,
         property_types: list[str],
+        min_price: Decimal | None,
         max_price: Decimal | None,
+        min_area_m2: Decimal | None,
         min_bedrooms: int | None,
         ai_prompt: str,
         variant_label: str,
@@ -292,7 +322,9 @@ Parámetros base:
 - Provincia: {province}
 - Zona / municipio objetivo: {zone_text}
 - Tipologías objetivo: {property_types_text}
+- Precio mínimo: {min_price if min_price is not None else "sin definir"}
 - Precio máximo: {max_price if max_price is not None else "sin definir"}
+- Metros mínimos: {min_area_m2 if min_area_m2 is not None else "sin definir"}
 - Dormitorios mínimos: {min_bedrooms if min_bedrooms is not None else "sin definir"}
 
 Contexto adicional del usuario:
@@ -310,6 +342,9 @@ Reglas obligatorias:
 - Si se ha indicado zona o municipio, prioriza esa zona.
 - Si la operación es alquiler, no mezcles venta.
 - Si la operación es venta, no mezcles alquiler.
+- Respeta el precio mínimo si está definido.
+- Respeta el precio máximo si está definido.
+- Respeta los metros mínimos si están definidos.
 - Máximo 5 resultados para esta subbúsqueda.
 - Prioriza calidad y trazabilidad por encima de cantidad.
 
@@ -348,7 +383,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
         province: str,
         zone: str,
         property_types: list[str],
+        min_price: Decimal | None,
         max_price: Decimal | None,
+        min_area_m2: Decimal | None,
         min_bedrooms: int | None,
         ai_prompt: str,
         variant_label: str,
@@ -362,7 +399,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             province=province,
             zone=zone,
             property_types=property_types,
+            min_price=min_price,
             max_price=max_price,
+            min_area_m2=min_area_m2,
             min_bedrooms=min_bedrooms,
             ai_prompt=ai_prompt,
             variant_label=variant_label,
@@ -490,7 +529,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
         province: str,
         zone: str = "",
         property_types: list[str],
+        min_price: Decimal | None,
         max_price: Decimal | None,
+        min_area_m2: Decimal | None,
         min_bedrooms: int | None,
         ai_prompt: str = "",
     ) -> AIDiscoveryResult:
@@ -501,7 +542,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             province=province,
             zone=zone,
             property_types=property_types,
+            min_price=min_price,
             max_price=max_price,
+            min_area_m2=min_area_m2,
             min_bedrooms=min_bedrooms,
             ai_prompt=ai_prompt,
         )
@@ -511,7 +554,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             "province": province,
             "zone": zone,
             "property_types": property_types,
+            "min_price": str(min_price) if min_price is not None else None,
             "max_price": str(max_price) if max_price is not None else None,
+            "min_area_m2": str(min_area_m2) if min_area_m2 is not None else None,
             "min_bedrooms": min_bedrooms,
             "ai_prompt": ai_prompt,
             "search_variants": search_variants,
@@ -547,7 +592,9 @@ Devuelve SOLO JSON válido con esta estructura exacta:
                     province=province,
                     zone=zone,
                     property_types=property_types,
+                    min_price=min_price,
                     max_price=max_price,
+                    min_area_m2=min_area_m2,
                     min_bedrooms=min_bedrooms,
                     ai_prompt=ai_prompt,
                     variant_label=variant["label"],

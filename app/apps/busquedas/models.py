@@ -37,7 +37,9 @@ class SearchProfile(models.Model):
     province = models.CharField("provincia", max_length=100)
     zone = models.CharField("zona / municipio", max_length=150, blank=True)
     property_types = models.JSONField("tipos de propiedad", default=list, blank=True)
+    min_price = models.DecimalField("precio mínimo", max_digits=12, decimal_places=2, null=True, blank=True)
     max_price = models.DecimalField("precio máximo", max_digits=12, decimal_places=2, null=True, blank=True)
+    min_area_m2 = models.DecimalField("metros mínimos", max_digits=10, decimal_places=2, null=True, blank=True)
     min_bedrooms = models.PositiveSmallIntegerField("dormitorios mínimos", null=True, blank=True)
     ai_prompt = models.TextField("texto guía para IA", blank=True)
 
