@@ -141,8 +141,12 @@ def capturedproperty_mark_in_review(request, pk):
     obj.review_status = CapturedProperty.ReviewStatus.REVIEWED
     obj.last_reviewed_at = timezone.now()
     obj.save(update_fields=["status", "review_status", "last_reviewed_at", "updated_at"])
-    messages.success(request, "Inmueble marcado en revisión.")
-    return redirect("capturedproperty_detail", pk=obj.pk)
+    messages.success(request, "Captación marcada en revisión.")
+    return redirect(
+        request.POST.get("next")
+        or request.META.get("HTTP_REFERER")
+        or f"/app/captacion/{obj.pk}/"
+    )
 
 
 @login_required

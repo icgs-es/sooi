@@ -201,6 +201,7 @@
                       {% if item.status != "in_review" %}
                         <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/">
                           {% csrf_token %}
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
                           <button class="action-menu__item" type="submit">En revisión</button>
                         </form>
                       {% endif %}
