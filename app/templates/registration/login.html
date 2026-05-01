@@ -111,4 +111,31 @@
     box-shadow: 0 0 0 3px rgba(37,99,235,.12);
   }
 </style>
+
+<script>
+  (function () {
+    const usernameInput = document.getElementById("id_username");
+    const rememberInput = document.getElementById("remember_username");
+    const form = usernameInput ? usernameInput.closest("form") : null;
+
+    if (!usernameInput || !rememberInput || !form) return;
+
+    const storedUsername = localStorage.getItem("sooiRememberUsername");
+
+    if (storedUsername) {
+      usernameInput.value = storedUsername;
+      rememberInput.checked = true;
+    }
+
+    form.addEventListener("submit", function () {
+      const username = usernameInput.value.trim();
+
+      if (rememberInput.checked && username) {
+        localStorage.setItem("sooiRememberUsername", username);
+      } else {
+        localStorage.removeItem("sooiRememberUsername");
+      }
+    });
+  })();
+</script>
 {% endblock %}
