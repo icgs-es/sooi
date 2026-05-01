@@ -338,32 +338,56 @@ def _run_mock_search(search_profile: SearchProfile) -> SearchRun:
 
     return run
 
-def _run_ai_discovery(search_profile: SearchProfile) -> SearchRun:
-    client = AIDiscoveryClient()
-    result = client.discover(
-        operation_type=search_profile.operation_type,
-        province=search_profile.province,
-        zone=search_profile.zone or "",
-        property_types=search_profile.property_types or [],
-        min_price=search_profile.min_price,
-        max_price=search_profile.max_price,
-        min_area_m2=search_profile.min_area_m2,
-        min_bedrooms=search_profile.min_bedrooms,
-        ai_prompt=search_profile.ai_prompt or "",
-    )
+def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = None) -> SearchRun:
+    if run is None:
+        run = SearchRun.objects.create(
+            search_profile=search_profile,
+            status=SearchRun.Status.RUNNING,
+            execution_mode=SearchRun.ExecutionMode.AI_DISCOVERY,
+            started_at=timezone.now(),
+        )
+    else:
+        run.status = SearchRun.Status.RUNNING
+        run.execution_mode = SearchRun.ExecutionMode.AI_DISCOVERY
+        run.started_at = run.started_at or timezone.now()
+        run.save(update_fields=["status", "execution_mode", "started_at", "updated_at"])
 
-    run = SearchRun.objects.create(
-        search_profile=search_profile,
-        status=SearchRun.Status.RUNNING,
-        execution_mode=SearchRun.ExecutionMode.AI_DISCOVERY,
-        provider=result.provider,
-        model_name=result.model_name,
-        query_text=result.query_text,
-        filters_snapshot=result.filters_snapshot,
-        raw_response=result.raw_response,
-        warnings=result.warnings,
-        started_at=timezone.now(),
-    )
+    try:
+        client = AIDiscoveryClient()
+        result = client.discover(
+            operation_type=search_profile.operation_type,
+            province=search_profile.province,
+            zone=search_profile.zone or "",
+            property_types=search_profile.property_types or [],
+            min_price=search_profile.min_price,
+            max_price=search_profile.max_price,
+            min_area_m2=search_profile.min_area_m2,
+            min_bedrooms=search_profile.min_bedrooms,
+            ai_prompt=search_profile.ai_prompt or "",
+        )
+    except Exception as exc:
+        run.status = SearchRun.Status.FAILED
+        run.finished_at = timezone.now()
+        run.error_message = str(exc)
+        run.warnings = [f"Error inesperado en ejecución IA: {exc}"]
+        run.save(update_fields=["status", "finished_at", "error_message", "warnings", "updated_at"])
+        return run
+
+    run.provider = result.provider
+    run.model_name = result.model_name
+    run.query_text = result.query_text
+    run.filters_snapshot = result.filters_snapshot
+    run.raw_response = result.raw_response
+    run.warnings = result.warnings
+    run.save(update_fields=[
+        "provider",
+        "model_name",
+        "query_text",
+        "filters_snapshot",
+        "raw_response",
+        "warnings",
+        "updated_at",
+    ])
 
     total_candidates = len(result.items)
     total_valid_candidates = 0
@@ -389,10 +413,11 @@ def _run_ai_discovery(search_profile: SearchProfile) -> SearchRun:
         total_valid_candidates += 1
 
         source = _get_or_create_real_source(item.source_name, item.source_url)
-        
+
         normalized_url = _normalize_property_url(item.source_url)
         external_id = normalized_url or f"{search_profile.id}-ai-{idx}"
         zone_text = getattr(item, "zone_text", None) or getattr(item, "zone", None) or ""
+
         possible_duplicate = _has_probable_duplicate(
             owner=search_profile.owner,
             source=source,
@@ -434,6 +459,7 @@ def _run_ai_discovery(search_profile: SearchProfile) -> SearchRun:
                 "last_seen_at": timezone.now(),
             },
         )
+
         if created:
             total_new += 1
         else:
@@ -447,11 +473,12 @@ def _run_ai_discovery(search_profile: SearchProfile) -> SearchRun:
     run.total_new = total_new
     run.total_updated = total_updated
     run.total_errors = total_errors
-    run.run_notes = "Ejecución AI Discovery."
+    run.run_notes = "Ejecución AI Discovery en segundo plano."
     run.warnings = list(run.warnings or [])
     run.save()
 
     return run
 
-def run_search_profile(search_profile: SearchProfile) -> SearchRun:
-    return _run_ai_discovery(search_profile)
+
+def run_search_profile(search_profile: SearchProfile, run: SearchRun | None = None) -> SearchRun:
+    return _run_ai_discovery(search_profile, run=run)

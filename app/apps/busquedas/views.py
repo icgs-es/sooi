@@ -9,7 +9,7 @@ from apps.seguimiento.models import PropertyOpportunity
 
 from .forms import SearchProfileForm
 from .models import SearchProfile, SearchRun
-from .services import run_search_profile
+from .tasks import run_search_profile_task
 
 
 MAX_ACTIVE_SEARCHES = 6
@@ -195,12 +195,36 @@ def searchprofile_update(request, pk):
 @require_POST
 def searchprofile_execute(request, pk):
     obj = get_object_or_404(SearchProfile, pk=pk, owner=request.user)
-    run = run_search_profile(obj)
+
+    if obj.status != SearchProfile.Status.ACTIVE:
+        messages.warning(request, "Solo se pueden ejecutar búsquedas activas.")
+        return redirect("searchprofile_detail", pk=obj.pk)
+
+    run = SearchRun.objects.create(
+        search_profile=obj,
+        status=SearchRun.Status.PENDING,
+        execution_mode=SearchRun.ExecutionMode.AI_DISCOVERY,
+        started_at=timezone.now(),
+        filters_snapshot={
+            "operation_type": obj.operation_type,
+            "province": obj.province,
+            "zone": obj.zone or "",
+            "property_types": obj.property_types or [],
+            "min_price": str(obj.min_price) if obj.min_price is not None else None,
+            "max_price": str(obj.max_price) if obj.max_price is not None else None,
+            "min_area_m2": str(obj.min_area_m2) if obj.min_area_m2 is not None else None,
+            "min_bedrooms": obj.min_bedrooms,
+            "ai_prompt": obj.ai_prompt or "",
+        },
+    )
+
+    run_search_profile_task.delay(obj.pk, run.id)
+
     messages.success(
         request,
-        f"Búsqueda ejecutada: {run.total_found} captaciones procesadas, {run.total_new} nuevas.",
+        "Exploración IA lanzada en segundo plano. Puedes seguir usando SOOI mientras se completa.",
     )
-    return redirect("capturedproperty_list")
+    return redirect("searchprofile_detail", pk=obj.pk)
 
 @login_required
 @require_POST

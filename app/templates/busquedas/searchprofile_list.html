@@ -171,7 +171,19 @@
                 <td style="padding:12px;">
                   {% include "seguimiento/_search_badge.html" with search_profile=run.search_profile %}
                 </td>
-                <td style="padding:12px;">{{ run.get_status_display }}</td>
+                <td style="padding:12px;">
+                  {% if run.status == "running" %}
+                    <span class="run-status-badge run-status-badge--running">{{ run.get_status_display }}</span>
+                  {% elif run.status == "pending" %}
+                    <span class="run-status-badge run-status-badge--pending">{{ run.get_status_display }}</span>
+                  {% elif run.status == "failed" or run.status == "completed_with_errors" %}
+                    <span class="run-status-badge run-status-badge--error">{{ run.get_status_display }}</span>
+                  {% elif run.status == "completed" %}
+                    <span class="run-status-badge run-status-badge--completed">{{ run.get_status_display }}</span>
+                  {% else %}
+                    {{ run.get_status_display }}
+                  {% endif %}
+                </td>
                 <td style="padding:12px;">{{ run.total_found }}</td>
                 <td style="padding:12px;">{{ run.total_new }}</td>
                 <td style="padding:12px;">{{ run.total_updated }}</td>

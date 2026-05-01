@@ -87,6 +87,26 @@
     .content{
       padding:24px;
     }
+    .active-ai-runs-banner{
+      margin-bottom:18px;
+      padding:14px 16px;
+      border:1px solid #bfdbfe;
+      border-radius:14px;
+      background:#eff6ff;
+      color:#1e3a8a;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+    .active-ai-runs-banner strong{
+      color:#1d4ed8;
+    }
+    .active-ai-runs-banner ul{
+      margin:6px 0 0;
+      padding-left:18px;
+    }
     .page-card{
       background:var(--surface);
       border:1px solid var(--line);
@@ -142,6 +162,57 @@
     .btn-primary{
       background:var(--primary);
       color:#fff;
+    }
+
+    .run-status-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:5px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+      border:1px solid transparent;
+    }
+
+    .run-status-badge::before{
+      content:"";
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:currentColor;
+    }
+
+    .run-status-badge--running{
+      background:#fff7ed;
+      color:#c2410c;
+      border-color:#fdba74;
+      animation: sooi-run-pulse 1s ease-in-out infinite;
+    }
+
+    .run-status-badge--pending{
+      background:#eff6ff;
+      color:#1d4ed8;
+      border-color:#bfdbfe;
+      animation: sooi-run-pulse 1.2s ease-in-out infinite;
+    }
+
+    .run-status-badge--completed{
+      background:#ecfdf5;
+      color:#047857;
+      border-color:#a7f3d0;
+    }
+
+    .run-status-badge--error{
+      background:#fef2f2;
+      color:#b91c1c;
+      border-color:#fecaca;
+    }
+
+    @keyframes sooi-run-pulse{
+      0%, 100% { opacity:1; transform:scale(1); }
+      50% { opacity:.55; transform:scale(1.03); }
     }
     @media (max-width: 960px){
       .app{grid-template-columns:1fr}

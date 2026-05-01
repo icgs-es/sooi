@@ -54,6 +54,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.core.context_processors.system_settings",
+                "apps.core.context_processors.active_ai_search_runs",
             ],
         },
     },
