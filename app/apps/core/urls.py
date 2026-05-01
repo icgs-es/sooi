@@ -3,6 +3,8 @@ from django.urls import include, path
 from .views import (
     dashboard,
     home,
+    privacy_policy,
+    terms_of_use,
     internal_user_create,
     internal_user_edit,
     internal_user_list,
@@ -11,6 +13,8 @@ from .views import (
 
 urlpatterns = [
     path("", home, name="home"),
+    path("privacidad/", privacy_policy, name="privacy_policy"),
+    path("terminos/", terms_of_use, name="terms_of_use"),
     path("app/", dashboard, name="dashboard"),
     path("app/configuracion/", system_settings_edit, name="system_settings"),
     path("app/ia/", include("apps.ia.urls")),
