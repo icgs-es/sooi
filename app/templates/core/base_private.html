@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SOOI{% endblock %}</title>
+  {% if system_settings and system_settings.favicon %}
+    <link rel="icon" href="{{ system_settings.favicon.url }}">
+    <link rel="shortcut icon" href="{{ system_settings.favicon.url }}">
+  {% endif %}
   <style>
     :root{
       --bg:#f4f7fb;

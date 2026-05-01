@@ -26,6 +26,14 @@ class SystemSettings(models.Model):
         verbose_name="proveedor IA por defecto",
     )
 
+    favicon = models.ImageField(
+        "favicon",
+        upload_to="branding/",
+        blank=True,
+        null=True,
+        help_text="Icono pequeño del navegador. Recomendado: PNG/ICO cuadrado.",
+    )
+
     created_at = models.DateTimeField("creado", auto_now_add=True)
     updated_at = models.DateTimeField("actualizado", auto_now=True)
 

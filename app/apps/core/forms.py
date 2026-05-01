@@ -15,6 +15,7 @@ class SystemSettingsForm(forms.ModelForm):
             "company_notes",
             "logo",
             "login_logo",
+            "favicon",
             "default_ai_provider",
         ]
         widgets = {
