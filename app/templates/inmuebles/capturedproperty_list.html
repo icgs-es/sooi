@@ -146,7 +146,7 @@
                   {% endif %}
                 </td>
                 <td style="padding:12px; font-weight:600;">
-                  <a href="/app/captacion/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                  <a href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}" style="color:inherit; text-decoration:none;">
                     {{ item.title }}
                   </a>
 
@@ -189,7 +189,7 @@
                     <summary class="action-menu__trigger">⋯</summary>
 
                     <div class="action-menu__panel">
-                      <a class="action-menu__item" href="/app/captacion/{{ item.id }}/">Abrir</a>
+                      <a class="action-menu__item" href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}">Abrir</a>
 
                       {% if not item.is_interesting %}
                         <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">

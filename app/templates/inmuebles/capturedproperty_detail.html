@@ -9,9 +9,9 @@
     <p>Ficha base del inmueble captado dentro de la Bandeja de Captación.</p>
 
     <div class="actions">
-      <a class="btn" href="/app/captacion/">Volver a captación</a>
+      <a class="btn" href="{{ next_url }}">Volver a captación</a>
       
-      <a class="btn" href="/app/captacion/{{ item.id }}/editar/">Editar captación</a>
+      <a class="btn" href="/app/captacion/{{ item.id }}/editar/?next={{ next_url|urlencode }}">Editar captación</a>
       
       {% if not item.is_interesting %}
         <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/" style="display:inline;">

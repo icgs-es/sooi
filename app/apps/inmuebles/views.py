@@ -14,6 +14,8 @@ from .models import CapturedProperty
 
 @login_required
 def capturedproperty_list(request):
+    request.session["capturedproperty_last_list_url"] = request.get_full_path()
+
     status = request.GET.get("status", "").strip()
     operation_type = request.GET.get("operation_type", "").strip()
     property_type = request.GET.get("property_type", "").strip()
@@ -107,12 +109,15 @@ def capturedproperty_detail(request, pk):
     except PropertyOpportunity.DoesNotExist:
         existing_opportunity = None
 
+    next_url = request.GET.get("next") or request.session.get("capturedproperty_last_list_url") or "/app/captacion/"
+
     return render(
         request,
         "inmuebles/capturedproperty_detail.html",
         {
             "item": obj,
             "existing_opportunity": existing_opportunity,
+            "next_url": next_url,
         },
     )
 
@@ -223,28 +228,22 @@ def capturedproperty_delete(request, pk):
     except PropertyOpportunity.DoesNotExist:
         existing_opportunity = None
 
+    list_url = request.session.get("capturedproperty_last_list_url") or ""
+    next_url = request.POST.get("next") or list_url or request.META.get("HTTP_REFERER") or ""
+
     if existing_opportunity:
         messages.error(
             request,
             "No se puede eliminar esta captación porque ya tiene una oportunidad asociada.",
         )
-        return redirect(
-            request.POST.get("next")
-            or request.META.get("HTTP_REFERER")
-            or "/app/captacion/"
-        )
-
-    search_profile_id = obj.search_profile_id
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or ""
+        return redirect(next_url or "/app/captacion/")
 
     deleted_detail_url = f"/app/captacion/{obj.pk}/"
 
     # Nunca volver al detalle de una captación eliminada.
+    # Primero intentamos volver a la última bandeja exacta, con todos sus filtros.
     if not next_url or deleted_detail_url in next_url:
-        if search_profile_id:
-            next_url = f"/app/captacion/?search_profile_id={search_profile_id}"
-        else:
-            next_url = "/app/captacion/"
+        next_url = list_url or "/app/captacion/"
 
     obj.delete()
     messages.success(request, "Captación eliminada correctamente.")
