@@ -69,6 +69,17 @@
       </div>
       
       <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Ubicación</label>
+        <input
+          type="text"
+          name="location"
+          value="{{ current_location_query }}"
+          placeholder="Ej. Pozoblanco, Hinojosa, calle..."
+          style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:240px;"
+        >
+      </div>
+
+      <div>
         <label style="display:block; font-weight:600; margin-bottom:6px;">Fuente</label>
         <select name="source_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
           <option value="">Todas</option>
@@ -197,6 +208,7 @@
                       {% if not item.existing_opportunity %}
                         <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
                           {% csrf_token %}
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
                           <button class="action-menu__item action-menu__item--danger" type="submit">
                             Eliminar
                           </button>

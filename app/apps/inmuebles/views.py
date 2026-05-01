@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -18,6 +19,7 @@ def capturedproperty_list(request):
     property_type = request.GET.get("property_type", "").strip()
     source_id = request.GET.get("source_id", "").strip()
     entry_mode = request.GET.get("entry_mode", "").strip()
+    location_query = request.GET.get("location", "").strip()
     search_profile_id = request.GET.get("search_profile_id", "").strip()
 
     qs = (
@@ -37,6 +39,14 @@ def capturedproperty_list(request):
 
     if source_id:
         qs = qs.filter(source_id=source_id)
+
+    if location_query:
+        qs = qs.filter(
+            Q(municipality__icontains=location_query)
+            | Q(province__icontains=location_query)
+            | Q(zone_text__icontains=location_query)
+            | Q(title__icontains=location_query)
+        )
 
     if entry_mode:
         qs = qs.filter(entry_mode=entry_mode)
@@ -72,6 +82,7 @@ def capturedproperty_list(request):
             "current_property_type": property_type,
             "current_source_id": source_id,
             "current_entry_mode": entry_mode,
+            "current_location_query": location_query,
             "current_search_profile_id": search_profile_id,
             "status_choices": CapturedProperty.Status.choices,
             "operation_type_choices": CapturedProperty.OperationType.choices,
@@ -217,11 +228,27 @@ def capturedproperty_delete(request, pk):
             request,
             "No se puede eliminar esta captación porque ya tiene una oportunidad asociada.",
         )
-        return redirect(request.META.get("HTTP_REFERER", f"/app/captacion/{obj.pk}/"))
+        return redirect(
+            request.POST.get("next")
+            or request.META.get("HTTP_REFERER")
+            or "/app/captacion/"
+        )
+
+    search_profile_id = obj.search_profile_id
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or ""
+
+    deleted_detail_url = f"/app/captacion/{obj.pk}/"
+
+    # Nunca volver al detalle de una captación eliminada.
+    if not next_url or deleted_detail_url in next_url:
+        if search_profile_id:
+            next_url = f"/app/captacion/?search_profile_id={search_profile_id}"
+        else:
+            next_url = "/app/captacion/"
 
     obj.delete()
     messages.success(request, "Captación eliminada correctamente.")
-    return redirect("/app/captacion/")
+    return redirect(next_url)
 
 
 @login_required
