@@ -323,11 +323,17 @@ def opportunity_contact_list_create(request):
     if request.method == "POST":
         form = OpportunityContactForm(request.POST)
         if form.is_valid():
-            obj = form.save(commit=False)
-            obj.owner = request.user
-            obj.save()
-            messages.success(request, f'Contacto creado: "{obj.full_name}".')
-            return redirect("opportunity_contact_list")
+            try:
+                obj = form.save(commit=False)
+                obj.owner = request.user
+                obj.save()
+                messages.success(request, f'Contacto creado: "{obj.full_name}".')
+                return redirect("opportunity_contact_list")
+            except Exception:
+                messages.error(
+                    request,
+                    "No se pudo crear el contacto. Revisa los datos e inténtalo de nuevo.",
+                )
     else:
         form = OpportunityContactForm()
 
@@ -339,7 +345,8 @@ def opportunity_contact_list_create(request):
             "form": form,
         },
     )
-    
+
+
 @login_required
 def alert_list_create(request):
     items = (
