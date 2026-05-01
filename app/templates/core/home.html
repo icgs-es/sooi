@@ -6,19 +6,21 @@
 <div style="min-height:100vh; background:#f4f7fb; color:#0f172a;">
 
   <header style="background:#ffffff; border-bottom:1px solid #dbe3ee;">
-    <div style="max-width:1180px; margin:0 auto; padding:18px 24px; display:flex; align-items:center; justify-content:space-between; gap:18px;">
-      <div style="display:flex; align-items:center; gap:14px;">
-        {% if system_settings and system_settings.logo %}
-          <img src="{{ system_settings.logo.url }}" alt="SOOI" style="height:46px; width:auto;">
+    <div style="max-width:1180px; margin:0 auto; padding:18px 14px 18px 10px; min-height:92px; display:flex; align-items:center; justify-content:space-between; gap:20px;">
+      <a href="/" style="display:flex; align-items:center; text-decoration:none; flex:0 0 auto;">
+        {% if system_settings and system_settings.public_logo %}
+          <img src="{{ system_settings.public_logo.url }}" alt="SOOI" style="display:block; height:68px; max-width:320px; width:auto; object-fit:contain;">
+        {% elif system_settings and system_settings.logo %}
+          <img src="{{ system_settings.logo.url }}" alt="SOOI" style="display:block; height:68px; max-width:320px; width:auto; object-fit:contain;">
         {% else %}
-          <strong style="font-size:28px;">SOOI</strong>
+          <strong style="font-size:34px; color:#0f172a;">SOOI</strong>
         {% endif %}
-      </div>
+      </a>
 
-      <nav style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <a href="#como-funciona" style="color:#334155; text-decoration:none; font-weight:600;">Cómo funciona</a>
-        <a href="#para-quien" style="color:#334155; text-decoration:none; font-weight:600;">Para quién</a>
-        <a href="/accounts/login/" style="display:inline-flex; align-items:center; min-height:42px; padding:0 16px; border-radius:10px; background:#0f172a; color:#fff; text-decoration:none; font-weight:700;">
+      <nav style="display:flex; align-items:center; gap:18px; flex-wrap:wrap; justify-content:flex-end;">
+        <a href="#como-funciona" style="color:#334155; text-decoration:none; font-weight:700;">Cómo funciona</a>
+        <a href="#para-quien" style="color:#334155; text-decoration:none; font-weight:700;">Para quién</a>
+        <a href="/accounts/login/" style="display:inline-flex; align-items:center; min-height:46px; padding:0 20px; border-radius:12px; background:#0f172a; color:#fff; text-decoration:none; font-weight:800;">
           Acceder
         </a>
       </nav>
@@ -144,6 +146,18 @@
 
 <style>
   @media (max-width: 900px) {
+    header > div {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+    }
+    header img {
+      height: 56px !important;
+      max-width: 260px !important;
+    }
+    header nav {
+      width: 100% !important;
+      justify-content: flex-start !important;
+    }
     main section {
       grid-template-columns: 1fr !important;
     }

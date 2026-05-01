@@ -10,6 +10,14 @@ class SystemSettings(models.Model):
     company_website = models.URLField("web", blank=True)
     company_notes = models.TextField("información relevante", blank=True)
     logo = models.ImageField("logo", upload_to="branding/", blank=True, null=True)
+    public_logo = models.ImageField(
+        "logo público / landing",
+        upload_to="branding/",
+        blank=True,
+        null=True,
+        help_text="Logo recomendado para la landing pública sobre fondo claro.",
+    )
+
     login_logo = models.ImageField(
         "logo para login",
         upload_to="branding/",

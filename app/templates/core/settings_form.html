@@ -59,6 +59,18 @@
               <div style="margin-top:10px;">
                 <img src="{{ item.logo.url }}" alt="Logo actual" style="max-height:72px; width:auto; border:1px solid #dbe3ee; border-radius:10px; padding:6px; background:#fff;">
               </div>
+
+        <div>
+          <label><strong>Logo público / landing</strong></label>
+          {{ form.public_logo }}
+          {{ form.public_logo.errors }}
+
+          {% if item and item.public_logo %}
+            <div style="margin-top:10px;">
+              <img src="{{ item.public_logo.url }}" alt="Logo público actual" style="max-height:54px; max-width:220px; border:1px solid #dbe3ee; border-radius:10px; padding:6px; background:#fff;">
+            </div>
+          {% endif %}
+        </div>
             {% endif %}
           </div>
           <div>

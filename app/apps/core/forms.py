@@ -14,6 +14,7 @@ class SystemSettingsForm(forms.ModelForm):
             "company_website",
             "company_notes",
             "logo",
+            "public_logo",
             "login_logo",
             "favicon",
             "default_ai_provider",
