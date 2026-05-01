@@ -1,52 +1,69 @@
 {% extends "core/base_public.html" %}
 
-{% block title %}Política de privacidad | SOOI{% endblock %}
+{% block title %}Privacidad | SOOI{% endblock %}
 
 {% block content %}
-<div style="max-width:920px; margin:40px auto; padding:0 20px;">
-  <div style="background:#fff; border:1px solid #dbe3ee; border-radius:20px; padding:28px;">
-    <h1 style="margin-top:0;">Política de privacidad</h1>
+<div style="min-height:100vh; background:#f4f7fb; padding:56px 20px; color:#0f172a;">
+  <div style="max-width:880px; margin:0 auto;">
+    <div style="background:#fff; border:1px solid #dbe3ee; border-radius:24px; padding:34px;">
+      <a href="/" style="color:#64748b; text-decoration:none; font-weight:700;">← Volver a SOOI</a>
 
-    <p style="color:#64748b;">
-      Documento base pendiente de revisión legal definitiva. Esta página resume el criterio operativo de privacidad aplicado en SOOI.
-    </p>
+      <h1 style="margin:24px 0 12px; font-size:38px;">Política de privacidad</h1>
+      <p style="color:#64748b;">Última actualización: mayo de 2026.</p>
 
-    <h2>1. Uso de la información</h2>
-    <p>
-      SOOI registra información operativa relacionada con búsquedas inmobiliarias, captaciones, oportunidades,
-      tareas, alertas y seguimiento interno del usuario.
-    </p>
+      <h2>1. Responsable</h2>
+      <p>
+        El responsable del tratamiento de los datos asociados a SOOI es
+        <strong>{{ system_settings.company_name|default:"ICGS Gestión & Servicios S.L." }}</strong>.
+        Para consultas relacionadas con privacidad puedes escribir a
+        <a href="mailto:info@sooi.io">info@sooi.io</a>.
+      </p>
 
-    <h2>2. Datos de anuncios y fuentes externas</h2>
-    <p>
-      SOOI puede conservar la URL original del anuncio como referencia interna y trazabilidad.
-      El sistema no debe reproducir, republicar ni explotar comercialmente el contenido completo de portales externos.
-    </p>
+      <h2>2. Datos tratados</h2>
+      <p>
+        SOOI puede tratar datos de registro, contacto, solicitudes de demo, datos operativos introducidos por el usuario,
+        búsquedas, captaciones, tareas, alertas y notas internas asociadas al seguimiento inmobiliario.
+      </p>
 
-    <h2>3. Datos personales</h2>
-    <p>
-      Cuando una oportunidad implique datos de particulares, se aplicará un criterio de minimización:       conservar únicamente los datos necesarios para el seguimiento operativo.
-    </p>
+      <h2>3. Finalidad</h2>
+      <p>
+        Los datos se utilizan para prestar el servicio, gestionar el acceso de usuarios, responder solicitudes de demo,
+        operar el sistema de oportunidades inmobiliarias y mejorar la seguridad y trazabilidad del producto.
+      </p>
 
-    <h2>4. Contacto con anunciantes</h2>
-    <p>
-      El contacto con anunciantes debe realizarse preferentemente mediante el canal original del portal o fuente.
-      SOOI se utilizará para documentar internamente acciones, tareas, notas y decisiones.
-    </p>
+      <h2>4. Datos de inmuebles y contactos</h2>
+      <p>
+        SOOI está diseñado para minimizar la información personal almacenada. Se recomienda registrar solo la información         estrictamente necesaria para el seguimiento operativo y evitar copiar datos personales innecesarios desde portales externos.
+      </p>
 
-    <h2>5. Seguridad</h2>
-    <p>
-      El acceso al sistema está protegido mediante autenticación. Cada usuario solo debe acceder a la información       asociada a su propio espacio de trabajo.
-    </p>
+      <h2>5. Conservación</h2>
+      <p>
+        Los datos se conservarán mientras exista una relación activa con el usuario o mientras sean necesarios para la prestación         del servicio, salvo solicitud de eliminación o bloqueo cuando corresponda.
+      </p>
 
-    <h2>6. Revisión</h2>
-    <p>
-      Esta política debe revisarse antes de cualquier comercialización pública o despliegue con clientes externos.
-    </p>
+      <h2>6. Seguridad</h2>
+      <p>
+        SOOI aplica medidas técnicas razonables como autenticación, control de acceso, aislamiento por usuario,
+        copias de seguridad y gestión controlada de credenciales.
+      </p>
 
-    <div style="margin-top:24px;">
-      <a href="/accounts/login/" style="color:#0f172a; font-weight:700;">Volver al acceso</a>
+      <h2>7. Derechos</h2>
+      <p>
+        Puedes solicitar acceso, rectificación, eliminación o limitación del tratamiento escribiendo a
+        <a href="mailto:info@sooi.io">info@sooi.io</a>.
+      </p>
+
+      <h2>8. Cambios</h2>
+      <p>
+        Esta política podrá actualizarse para reflejar cambios funcionales, comerciales o normativos del servicio.
+      </p>
     </div>
   </div>
 </div>
+
+<style>
+  h2 { margin-top:28px; font-size:22px; }
+  p { color:#475569; line-height:1.7; }
+  a { color:#2563eb; }
+</style>
 {% endblock %}
