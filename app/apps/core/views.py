@@ -1,3 +1,5 @@
+from django.core.mail import send_mail
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render, get_object_or_404
@@ -7,7 +9,7 @@ from apps.busquedas.models import SearchProfile
 from apps.inmuebles.models import CapturedProperty
 from apps.seguimiento.models import Alert, FollowUpTask, PropertyOpportunity
 
-from .forms import SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm
+from .forms import DemoRequestForm, SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm
 from .models import SystemSettings
 
 
@@ -174,5 +176,48 @@ def internal_user_edit(request, pk):
         {
             "form": form,
             "item": item,
+        },
+    )
+
+def demo_request(request):
+    sent = False
+
+    if request.method == "POST":
+        form = DemoRequestForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.source_domain = request.get_host()
+            obj.save()
+
+            try:
+                send_mail(
+                    subject=f"Nueva solicitud de demo SOOI · {obj.name}",
+                    message=(
+                        f"Nombre: {obj.name}\n"
+                        f"Email: {obj.email}\n"
+                        f"Teléfono: {obj.phone or '-'}\n"
+                        f"Perfil: {obj.get_profile_type_display()}\n"
+                        f"Dominio: {obj.source_domain}\n\n"
+                        f"Mensaje:\n{obj.message or '-'}\n"
+                    ),
+                    from_email=None,
+                    recipient_list=["info@sooi.io"],
+                    fail_silently=False,
+                )
+            except Exception:
+                # La solicitud queda guardada aunque falle el aviso por email.
+                pass
+
+            sent = True
+            form = DemoRequestForm()
+    else:
+        form = DemoRequestForm()
+
+    return render(
+        request,
+        "core/demo_request_form.html",
+        {
+            "form": form,
+            "sent": sent,
         },
     )

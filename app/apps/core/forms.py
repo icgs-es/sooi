@@ -1,3 +1,4 @@
+from .models import DemoRequest
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -86,3 +87,17 @@ class InternalUserUpdateForm(forms.ModelForm):
         self.fields["first_name"].widget.attrs.update({"placeholder": "Nombre"})
         self.fields["last_name"].widget.attrs.update({"placeholder": "Apellidos"})
         self.fields["email"].widget.attrs.update({"placeholder": "email@empresa.com"})
+
+class DemoRequestForm(forms.ModelForm):
+    class Meta:
+        model = DemoRequest
+        fields = ["name", "email", "phone", "profile_type", "message"]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "Nombre y apellidos"}),
+            "email": forms.EmailInput(attrs={"placeholder": "tu@email.com"}),
+            "phone": forms.TextInput(attrs={"placeholder": "Teléfono opcional"}),
+            "message": forms.Textarea(attrs={
+                "rows": 5,
+                "placeholder": "Cuéntanos brevemente qué tipo de oportunidades inmobiliarias quieres gestionar con SOOI.",
+            }),
+        }

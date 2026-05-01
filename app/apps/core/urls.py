@@ -9,10 +9,12 @@ from .views import (
     internal_user_edit,
     internal_user_list,
     system_settings_edit,
+    demo_request,
 )
 
 urlpatterns = [
     path("", home, name="home"),
+    path("solicitar-demo/", demo_request, name="demo_request"),
     path("privacidad/", privacy_policy, name="privacy_policy"),
     path("terminos/", terms_of_use, name="terms_of_use"),
     path("app/", dashboard, name="dashboard"),

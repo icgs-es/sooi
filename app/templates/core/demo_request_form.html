@@ -1,0 +1,93 @@
+{% extends "core/base_public.html" %}
+
+{% block title %}Solicitar demo | SOOI{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh; background:#f4f7fb; padding:56px 20px; color:#0f172a;">
+  <div style="max-width:760px; margin:0 auto;">
+    <div style="background:#fff; border:1px solid #dbe3ee; border-radius:24px; padding:30px; box-shadow:0 18px 50px rgba(15,23,42,.06);">
+      <div style="margin-bottom:22px;">
+        <a href="/" style="color:#64748b; text-decoration:none; font-weight:700;">← Volver a SOOI</a>
+      </div>
+
+      <h1 style="margin:0; font-size:38px; line-height:1.1;">Solicitar demo de SOOI</h1>
+      <p style="margin:14px 0 0; color:#64748b; font-size:17px;">
+        Cuéntanos brevemente tu caso y te contactaremos para enseñarte el sistema.
+      </p>
+
+      {% if sent %}
+        <div style="margin-top:22px; padding:14px 16px; border-radius:14px; background:#ecfdf5; border:1px solid #bbf7d0; color:#166534; font-weight:700;">
+          Solicitud enviada correctamente. Te contactaremos lo antes posible.
+        </div>
+      {% endif %}
+
+      <form method="post" style="display:grid; gap:16px; margin-top:24px;">
+        {% csrf_token %}
+
+        <div>
+          <label>Nombre</label>
+          {{ form.name }}
+          {{ form.name.errors }}
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div>
+            <label>Email</label>
+            {{ form.email }}
+            {{ form.email.errors }}
+          </div>
+          <div>
+            <label>Teléfono</label>
+            {{ form.phone }}
+            {{ form.phone.errors }}
+          </div>
+        </div>
+
+        <div>
+          <label>Perfil</label>
+          {{ form.profile_type }}
+          {{ form.profile_type.errors }}
+        </div>
+
+        <div>
+          <label>Mensaje</label>
+          {{ form.message }}
+          {{ form.message.errors }}
+        </div>
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:8px;">
+          <button type="submit" style="min-height:48px; padding:0 20px; border:none; border-radius:12px; background:#0f172a; color:#fff; font-weight:800; cursor:pointer;">
+            Enviar solicitud
+          </button>
+          <a href="/" style="display:inline-flex; align-items:center; min-height:48px; padding:0 20px; border-radius:12px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; text-decoration:none; font-weight:800;">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  select,
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dbe3ee;
+    border-radius: 10px;
+    font: inherit;
+    box-sizing: border-box;
+    background:#fff;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  @media (max-width: 760px) {
+    form div[style*="grid-template-columns:1fr 1fr"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+{% endblock %}
