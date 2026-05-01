@@ -62,6 +62,17 @@
           {{ form.password }}
         </div>
 
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:-4px;">
+          <label style="display:flex; align-items:center; gap:8px; color:#334155; font-size:14px;">
+            <input id="remember_username" type="checkbox" style="width:16px; height:16px;">
+            Recordar usuario
+          </label>
+
+          <a href="/accounts/password_reset/" style="color:#2563eb; font-size:14px; font-weight:700; text-decoration:none;">
+            He olvidado mi contraseña
+          </a>
+        </div>
+
         {% if next %}
           <input type="hidden" name="next" value="{{ next }}">
         {% endif %}
