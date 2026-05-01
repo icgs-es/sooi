@@ -1,66 +1,158 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SOOI</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f7fa;
-      color: #1f2937;
-    }
-    .wrap {
-      max-width: 900px;
-      margin: 80px auto;
-      padding: 32px;
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 16px;
+{% extends "core/base_public.html" %}
+
+{% block title %}SOOI | Sistema Operativo de Oportunidades Inmobiliarias{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh; background:#f4f7fb; color:#0f172a;">
+
+  <header style="background:#ffffff; border-bottom:1px solid #dbe3ee;">
+    <div style="max-width:1180px; margin:0 auto; padding:18px 24px; display:flex; align-items:center; justify-content:space-between; gap:18px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        {% if system_settings and system_settings.logo %}
+          <img src="{{ system_settings.logo.url }}" alt="SOOI" style="height:46px; width:auto;">
+        {% else %}
+          <strong style="font-size:28px;">SOOI</strong>
+        {% endif %}
+      </div>
+
+      <nav style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <a href="#como-funciona" style="color:#334155; text-decoration:none; font-weight:600;">Cómo funciona</a>
+        <a href="#para-quien" style="color:#334155; text-decoration:none; font-weight:600;">Para quién</a>
+        <a href="/accounts/login/" style="display:inline-flex; align-items:center; min-height:42px; padding:0 16px; border-radius:10px; background:#0f172a; color:#fff; text-decoration:none; font-weight:700;">
+          Acceder
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section style="max-width:1180px; margin:0 auto; padding:76px 24px 48px; display:grid; grid-template-columns:1.1fr .9fr; gap:38px; align-items:center;">
+      <div>
+        <div style="display:inline-flex; padding:6px 12px; border-radius:999px; background:#e0f2fe; color:#0369a1; font-weight:700; font-size:13px; margin-bottom:18px;">
+          SaaS inmobiliario en beta privada
+        </div>
+
+        <h1 style="margin:0; font-size:54px; line-height:1.05; letter-spacing:-1.5px;">
+          Convierte búsquedas inmobiliarias en oportunidades reales de seguimiento.
+        </h1>
+
+        <p style="margin:22px 0 0; color:#475569; font-size:19px; line-height:1.7; max-width:720px;">
+          SOOI organiza captaciones, búsquedas, oportunidades, tareas y alertas en un flujo operativo claro:
+          buscar, revisar, decidir y hacer seguimiento sin depender de hojas de cálculo dispersas.
+        </p>
+
+        <div style="margin-top:30px; display:flex; gap:14px; flex-wrap:wrap;">
+          <a href="/accounts/login/" style="display:inline-flex; align-items:center; min-height:48px; padding:0 20px; border-radius:12px; background:#0f172a; color:#fff; text-decoration:none; font-weight:800;">
+            Acceder al sistema
+          </a>
+          <a href="mailto:info@sooi.io" style="display:inline-flex; align-items:center; min-height:48px; padding:0 20px; border-radius:12px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; text-decoration:none; font-weight:800;">
+            Solicitar demo
+          </a>
+        </div>
+
+        <p style="margin-top:18px; color:#64748b; font-size:14px;">
+          Actualmente en fase de pilotos controlados para inversores, captadores y pequeños operadores inmobiliarios.
+        </p>
+      </div>
+
+      <div style="background:#ffffff; border:1px solid #dbe3ee; border-radius:26px; padding:24px; box-shadow:0 18px 50px rgba(15,23,42,.08);">
+        <div style="border:1px solid #e2e8f0; border-radius:18px; overflow:hidden;">
+          <div style="padding:14px 16px; background:#0f172a; color:#fff; font-weight:800;">
+            Flujo SOOI
+          </div>
+          <div style="padding:18px; display:grid; gap:12px;">
+            <div style="padding:14px; border:1px solid #e2e8f0; border-radius:14px;">
+              <strong>1. Búsquedas / expedientes</strong>
+              <p style="margin:6px 0 0; color:#64748b;">Define zona, operación, precio, tipología y criterios de interés.</p>
+            </div>
+            <div style="padding:14px; border:1px solid #e2e8f0; border-radius:14px;">
+              <strong>2. Bandeja de captación</strong>
+              <p style="margin:6px 0 0; color:#64748b;">Centraliza inmuebles captados, revisa duplicados y filtra ruido.</p>
+            </div>
+            <div style="padding:14px; border:1px solid #e2e8f0; border-radius:14px;">
+              <strong>3. Oportunidades</strong>
+              <p style="margin:6px 0 0; color:#64748b;">Convierte lo interesante en una oportunidad con seguimiento.</p>
+            </div>
+            <div style="padding:14px; border:1px solid #e2e8f0; border-radius:14px;">
+              <strong>4. Tareas y alertas</strong>
+              <p style="margin:6px 0 0; color:#64748b;">Organiza llamadas, revisiones, avisos y próximos pasos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="como-funciona" style="max-width:1180px; margin:0 auto; padding:28px 24px;">
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:18px;">
+        <article style="background:#fff; border:1px solid #dbe3ee; border-radius:20px; padding:24px;">
+          <h2 style="margin:0 0 10px; font-size:22px;">Orden operativo</h2>
+          <p style="margin:0; color:#64748b; line-height:1.6;">
+            Cada búsqueda funciona como un expediente con captaciones, oportunidades, tareas y desenlace.
+          </p>
+        </article>
+
+        <article style="background:#fff; border:1px solid #dbe3ee; border-radius:20px; padding:24px;">
+          <h2 style="margin:0 0 10px; font-size:22px;">IA como apoyo</h2>
+          <p style="margin:0; color:#64748b; line-height:1.6;">
+            La IA ayuda a explorar, resumir y clasificar, pero la decisión operativa sigue bajo control del usuario.
+          </p>
+        </article>
+
+        <article style="background:#fff; border:1px solid #dbe3ee; border-radius:20px; padding:24px;">
+          <h2 style="margin:0 0 10px; font-size:22px;">Seguimiento real</h2>
+          <p style="margin:0; color:#64748b; line-height:1.6;">
+            Evita perder inmuebles interesantes por falta de trazabilidad, notas o próximas acciones.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="para-quien" style="max-width:1180px; margin:0 auto; padding:28px 24px 70px;">
+      <div style="background:#fff; border:1px solid #dbe3ee; border-radius:24px; padding:32px;">
+        <h2 style="margin:0; font-size:32px;">Pensado para trabajar oportunidades, no solo para acumular anuncios.</h2>
+        <div style="margin-top:20px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px;">
+          <div>
+            <strong>Inversores particulares</strong>
+            <p style="color:#64748b; line-height:1.6;">Control de zonas, precios, duplicados, oportunidades y seguimiento.</p>
+          </div>
+          <div>
+            <strong>Captadores inmobiliarios</strong>
+            <p style="color:#64748b; line-height:1.6;">Trabajo diario ordenado sobre inmuebles, tareas y contactos.</p>
+          </div>
+          <div>
+            <strong>Pequeños operadores</strong>
+            <p style="color:#64748b; line-height:1.6;">Base simple para coordinar búsquedas, revisar inmuebles y decidir.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer style="border-top:1px solid #dbe3ee; background:#ffffff;">
+    <div style="max-width:1180px; margin:0 auto; padding:22px 24px; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; color:#64748b; font-size:14px;">
+      <div>
+        <strong style="color:#0f172a;">SOOI</strong> · Sistema Operativo de Oportunidades Inmobiliarias
+      </div>
+      <div style="display:flex; gap:12px;">
+        <a href="/privacidad/" style="color:#64748b;">Privacidad</a>
+        <a href="/terminos/" style="color:#64748b;">Términos de uso</a>
+        <a href="mailto:info@sooi.io" style="color:#64748b;">info@sooi.io</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<style>
+  @media (max-width: 900px) {
+    main section {
+      grid-template-columns: 1fr !important;
     }
     h1 {
-      margin: 0 0 12px;
-      font-size: 42px;
+      font-size: 38px !important;
     }
-    p {
-      margin: 0 0 16px;
-      font-size: 18px;
-      line-height: 1.5;
+    section div[style*="repeat(3,1fr)"] {
+      grid-template-columns: 1fr !important;
     }
-    .muted {
-      color: #6b7280;
-    }
-    .actions {
-      margin-top: 24px;
-      display: flex;
-      gap: 12px;
-    }
-    a.button {
-      display: inline-block;
-      padding: 12px 18px;
-      border-radius: 10px;
-      text-decoration: none;
-      border: 1px solid #111827;
-      color: #111827;
-      font-weight: 600;
-    }
-    a.button.primary {
-      background: #111827;
-      color: #fff;
-    }
-  </style>
-</head>
-<body>
-  <main class="wrap">
-    <p class="muted">Sistema Operativo de Oportunidades Inmobiliarias</p>
-    <h1>SOOI</h1>
-    <p>Base inicial del proyecto ya operativa.</p>
-    <p class="muted">Siguiente fase: navegación, bandeja de captación y flujo real de oportunidades.</p>
-
-    <div class="actions">
-      <a class="btn btn-primary" href="/accounts/login/">Acceder</a>
-    </div>
-  </main>
-</body>
-</html>
+  }
+</style>
+{% endblock %}
