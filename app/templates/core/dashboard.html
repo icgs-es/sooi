@@ -5,32 +5,45 @@
 
 {% block content %}
   <div class="page-card">
-    <h1>Panel de SOOI</h1>
-    <p>Vista operativa inicial con métricas reales del sistema.</p>
+    <h1>Panel operativo</h1>
+    <p>Resumen de valor: captación, ruido detectado, oportunidades y seguimiento activo.</p>
   </div>
 
   <div class="quick-grid" style="margin-top: 18px;">
     <div class="quick-card">
-      <h3>Búsquedas</h3>
-      <p><strong>{{ stats.search_profiles }}</strong> perfiles guardados</p>
+      <h3>Búsquedas activas</h3>
+      <p><strong>{{ stats.search_profiles_active }}</strong> expedientes operativos</p>
+      <p><strong>{{ stats.search_profiles }}</strong> búsquedas totales</p>
     </div>
+
     <div class="quick-card">
       <h3>Captación</h3>
       <p><strong>{{ stats.captured_properties }}</strong> inmuebles captados</p>
-      <p><strong>{{ stats.captured_pending }}</strong> pendientes de revisar</p>
+      <p><strong>{{ stats.captured_review_queue }}</strong> en cola de revisión</p>
     </div>
+
+    <div class="quick-card">
+      <h3>Señales útiles</h3>
+      <p><strong>{{ stats.captured_interesting }}</strong> marcados como interesantes</p>
+      <p><strong>{{ stats.captured_duplicates }}</strong> posibles duplicados detectados</p>
+    </div>
+
     <div class="quick-card">
       <h3>Oportunidades</h3>
-      <p><strong>{{ stats.opportunities }}</strong> totales</p>
       <p><strong>{{ stats.opportunities_active }}</strong> activas</p>
+      <p><strong>{{ stats.opportunities_high }}</strong> prioridad alta</p>
     </div>
+
     <div class="quick-card">
-      <h3>Tareas</h3>
-      <p><strong>{{ stats.tasks_open }}</strong> abiertas / en progreso</p>
+      <h3>Conversión</h3>
+      <p><strong>{{ stats.capture_to_opportunity_ratio }}%</strong> captación → oportunidad</p>
+      <p><strong>{{ stats.opportunities }}</strong> oportunidades totales</p>
     </div>
+
     <div class="quick-card">
-      <h3>Alertas</h3>
-      <p><strong>{{ stats.alerts_new }}</strong> nuevas</p>
+      <h3>Seguimiento</h3>
+      <p><strong>{{ stats.tasks_open }}</strong> tareas abiertas</p>
+      <p><strong>{{ stats.alerts_new }}</strong> alertas nuevas</p>
     </div>
   </div>
 
@@ -92,7 +105,7 @@
                 <td style="padding:12px; font-weight:600;">{{ item.title }}</td>
                 <td style="padding:12px;">{{ item.get_status_display }}</td>
                 <td style="padding:12px;">{{ item.get_priority_display }}</td>
-                <td style="padding:12px;">{{ item.next_action|default:"—" }}</td>
+                <td style="padding:12px;">{% if item.next_action_type %}{{ item.get_next_action_type_display }}{% else %}—{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>

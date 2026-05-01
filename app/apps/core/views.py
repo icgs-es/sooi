@@ -27,18 +27,44 @@ def terms_of_use(request):
 
 @login_required
 def dashboard(request):
+    captured_total = CapturedProperty.objects.filter(owner=request.user).count()
+    opportunities_total = PropertyOpportunity.objects.filter(owner=request.user).count()
+
+    opportunities_active_qs = PropertyOpportunity.objects.filter(
+        owner=request.user,
+        status__in=["new", "active", "analysis", "negotiation"],
+    )
+
     stats = {
         "search_profiles": SearchProfile.objects.filter(owner=request.user).count(),
-        "captured_properties": CapturedProperty.objects.filter(owner=request.user).count(),
+        "search_profiles_active": SearchProfile.objects.filter(
+            owner=request.user,
+            status__in=["active", "paused"],
+        ).count(),
+
+        "captured_properties": captured_total,
         "captured_pending": CapturedProperty.objects.filter(
             owner=request.user,
             status="captured",
         ).count(),
-        "opportunities": PropertyOpportunity.objects.filter(owner=request.user).count(),
-        "opportunities_active": PropertyOpportunity.objects.filter(
+        "captured_review_queue": CapturedProperty.objects.filter(
             owner=request.user,
-            status__in=["new", "active", "analysis", "negotiation"],
+            review_status="pending",
+        ).exclude(status="discarded").count(),
+        "captured_interesting": CapturedProperty.objects.filter(
+            owner=request.user,
+            is_interesting=True,
         ).count(),
+        "captured_duplicates": CapturedProperty.objects.filter(
+            owner=request.user,
+            possible_duplicate=True,
+        ).exclude(status="discarded").count(),
+
+        "opportunities": opportunities_total,
+        "opportunities_active": opportunities_active_qs.count(),
+        "opportunities_high": opportunities_active_qs.filter(priority="high").count(),
+        "capture_to_opportunity_ratio": round((opportunities_total / captured_total) * 100) if captured_total else 0,
+
         "tasks_open": FollowUpTask.objects.filter(
             owner=request.user,
             status__in=["open", "in_progress"],
@@ -84,6 +110,7 @@ def dashboard(request):
             "recent_alerts": recent_alerts,
         },
     )
+
 
 @login_required
 def system_settings_edit(request):
