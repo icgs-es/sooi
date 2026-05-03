@@ -63,10 +63,7 @@
         </div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:-4px;">
-          <label style="display:flex; align-items:center; gap:8px; color:#334155; font-size:14px;">
-            <input id="remember_username" type="checkbox" style="width:16px; height:16px;">
-            Recordar usuario
-          </label>
+          
 
           <a href="/accounts/password_reset/" style="color:#2563eb; font-size:14px; font-weight:700; text-decoration:none;">
             He olvidado mi contraseña
@@ -128,30 +125,5 @@
   }
 </style>
 
-<script>
-  (function () {
-    const usernameInput = document.getElementById("id_username");
-    const rememberInput = document.getElementById("remember_username");
-    const form = usernameInput ? usernameInput.closest("form") : null;
 
-    if (!usernameInput || !rememberInput || !form) return;
-
-    const storedUsername = localStorage.getItem("sooiRememberUsername");
-
-    if (storedUsername) {
-      usernameInput.value = storedUsername;
-      rememberInput.checked = true;
-    }
-
-    form.addEventListener("submit", function () {
-      const username = usernameInput.value.trim();
-
-      if (rememberInput.checked && username) {
-        localStorage.setItem("sooiRememberUsername", username);
-      } else {
-        localStorage.removeItem("sooiRememberUsername");
-      }
-    });
-  })();
-</script>
 {% endblock %}
