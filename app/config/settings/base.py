@@ -41,6 +41,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+ADMIN_URL_PATH = env("DJANGO_ADMIN_PATH", default="admin").strip("/")
+
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
