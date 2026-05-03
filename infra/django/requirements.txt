@@ -8,3 +8,4 @@ whitenoise>=6.8
 openai>=1.0.0
 Pillow
 sentry-sdk[django]>=2,<3
+django-axes[ipware]>=8,<9
