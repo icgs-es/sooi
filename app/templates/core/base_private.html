@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -434,8 +435,9 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="{% static 'core/sooi_modern.css' %}?v=20260510-15">
 </head>
-<body>
+<body class="{% if '/app/busquedas/' in request.path or '/app/captacion/' in request.path or '/app/inbox/' in request.path %}module-capture{% elif '/app/oportunidades/' in request.path %}module-opportunity{% elif '/app/agenda/' in request.path or '/app/tareas/' in request.path or '/app/alertas/' in request.path %}module-tracking{% elif '/app/comercializadoras/' in request.path or '/app/contactos-oportunidad/' in request.path %}module-relations{% elif '/app/configuracion/' in request.path %}module-system{% else %}module-home{% endif %}">
   <div class="app">
     <aside class="sidebar">
       {% if system_settings and system_settings.logo %}
@@ -480,16 +482,81 @@
         </a>
       {% endif %}
 
-      <nav class="nav">
-        <a href="/app/">Panel</a>
-        <a href="/app/busquedas/">Búsquedas</a>
-        <a href="/app/captacion/">Bandeja de Captación</a>
-        <a href="/app/oportunidades/">Oportunidades</a>
-        <a href="/app/tareas/">Tareas</a>
-        <a href="/app/alertas/">Alertas</a>
-        <a href="/app/comercializadoras/">Comercializadoras</a>
-        <a href="/app/contactos-oportunidad/">Contactos</a>
-        <a href="/app/configuracion/">Configuración</a>
+      <nav class="nav nav-grouped">
+        <a class="nav-link nav-link--home {% if request.path == '/app/' %}is-active{% endif %}" href="/app/">
+          <span class="nav-link__dot"></span>
+          <span>Panel</span>
+        </a>
+
+        <div class="nav-section">
+          <div class="nav-section__title">Captación</div>
+
+          <a class="nav-link nav-link--capture {% if '/app/busquedas/' in request.path %}is-active{% endif %}" href="/app/busquedas/">
+            <span class="nav-link__dot"></span>
+            <span>Búsquedas</span>
+          </a>
+
+          <a class="nav-link nav-link--capture {% if '/app/captacion/' in request.path %}is-active{% endif %}" href="/app/captacion/">
+            <span class="nav-link__dot"></span>
+            <span>Bandeja de Captación</span>
+          </a>
+
+          <a class="nav-link nav-link--capture {% if '/app/inbox/' in request.path %}is-active{% endif %}" href="/app/inbox/">
+            <span class="nav-link__dot"></span>
+            <span>Inbox Email</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section__title">Oportunidades</div>
+
+          <a class="nav-link nav-link--opportunity {% if '/app/oportunidades/' in request.path %}is-active{% endif %}" href="/app/oportunidades/">
+            <span class="nav-link__dot"></span>
+            <span>Oportunidades</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section__title">Seguimiento</div>
+
+          <a class="nav-link nav-link--tracking {% if '/app/agenda/' in request.path %}is-active{% endif %}" href="/app/agenda/">
+            <span class="nav-link__dot"></span>
+            <span>Agenda</span>
+          </a>
+
+          <a class="nav-link nav-link--tracking {% if '/app/tareas/' in request.path %}is-active{% endif %}" href="/app/tareas/">
+            <span class="nav-link__dot"></span>
+            <span>Tareas</span>
+          </a>
+
+          <a class="nav-link nav-link--tracking {% if '/app/alertas/' in request.path %}is-active{% endif %}" href="/app/alertas/">
+            <span class="nav-link__dot"></span>
+            <span>Alertas</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section__title">Relaciones</div>
+
+          <a class="nav-link nav-link--relations {% if '/app/comercializadoras/' in request.path %}is-active{% endif %}" href="/app/comercializadoras/">
+            <span class="nav-link__dot"></span>
+            <span>Comercializadoras</span>
+          </a>
+
+          <a class="nav-link nav-link--relations {% if '/app/contactos-oportunidad/' in request.path %}is-active{% endif %}" href="/app/contactos-oportunidad/">
+            <span class="nav-link__dot"></span>
+            <span>Contactos</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section__title">Sistema</div>
+
+          <a class="nav-link nav-link--system {% if '/app/configuracion/' in request.path %}is-active{% endif %}" href="/app/configuracion/">
+            <span class="nav-link__dot"></span>
+            <span>Configuración</span>
+          </a>
+        </div>
       </nav>
 
       <div style="margin-top:auto; padding-top:24px; border-top:1px solid rgba(255,255,255,.10);">

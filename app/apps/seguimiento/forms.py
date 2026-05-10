@@ -11,7 +11,7 @@ class OpportunityForm(forms.ModelForm):
         label="Próxima revisión",
         required=False,
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S"],
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+        widget=forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}),
     )
 
     def __init__(self, *args, user=None, **kwargs):

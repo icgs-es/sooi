@@ -56,6 +56,20 @@ def capturedproperty_list(request):
     if search_profile_id:
         qs = qs.filter(search_profile_id=search_profile_id)
 
+    summary_qs = qs
+
+    capture_summary = {
+        "visible": summary_qs.count(),
+        "interesting": summary_qs.filter(is_interesting=True).count(),
+        "in_review": summary_qs.filter(status=CapturedProperty.Status.IN_REVIEW).count(),
+        "email": summary_qs.filter(entry_mode=CapturedProperty.EntryMode.EMAIL).count(),
+        "ai": summary_qs.filter(entry_mode=CapturedProperty.EntryMode.AI_EXPLORATION).count(),
+        "converted": PropertyOpportunity.objects.filter(
+            owner=request.user,
+            captured_property__in=summary_qs,
+        ).count(),
+    }
+
     items = list(qs)
     for obj in items:
         try:
@@ -79,6 +93,7 @@ def capturedproperty_list(request):
         "inmuebles/capturedproperty_list.html",
         {
             "captured_properties": items,
+            "capture_summary": capture_summary,
             "current_status": status,
             "current_operation_type": operation_type,
             "current_property_type": property_type,
@@ -130,7 +145,11 @@ def capturedproperty_mark_interesting(request, pk):
     obj.last_reviewed_at = timezone.now()
     obj.save(update_fields=["is_interesting", "last_reviewed_at", "updated_at"])
     messages.success(request, "Inmueble marcado como interesante.")
-    return redirect("capturedproperty_detail", pk=obj.pk)
+    return redirect(
+        request.POST.get("next")
+        or request.META.get("HTTP_REFERER")
+        or f"/app/captacion/{obj.pk}/"
+    )
 
 
 @login_required

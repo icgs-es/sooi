@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urlunparse
 from openai import OpenAI
 
 from apps.ia.models import AIProviderConfig
+from apps.fuentes.models import Source
 
 
 @dataclass
@@ -138,6 +139,38 @@ def _classify_provider_error(exc: Exception) -> str:
 
 def _unique_list(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
+
+
+def _get_active_target_sources() -> list[dict[str, Any]]:
+    sources = (
+        Source.objects.filter(
+            is_active=True,
+            source_type=Source.SourceType.PORTAL,
+        )
+        .exclude(base_url="")
+        .order_by("-is_verified", "name")
+    )
+
+    return [
+        {
+            "name": source.name,
+            "code": source.code,
+            "base_url": source.base_url,
+            "is_verified": source.is_verified,
+        }
+        for source in sources
+    ]
+
+
+def _format_target_sources_for_prompt(sources: list[dict[str, Any]]) -> str:
+    if not sources:
+        return "- No hay fuentes portal activas configuradas."
+
+    lines = []
+    for source in sources:
+        status = "verificada" if source.get("is_verified") else "pendiente de verificación"
+        lines.append(f"- {source['name']}: {source['base_url']} ({status})")
+    return "\n".join(lines)
 
 
 class AIDiscoveryClient:
@@ -307,6 +340,7 @@ class AIDiscoveryClient:
         ai_prompt: str,
         variant_label: str,
         variant_focus: str,
+        target_sources_text: str,
     ) -> str:
         operation_text = _operation_label(operation_type)
         property_types_text = _property_type_labels(property_types)
@@ -316,6 +350,18 @@ class AIDiscoveryClient:
 Actúa como motor de descubrimiento inmobiliario para SOOI.
 
 Busca oportunidades inmobiliarias REALES en portales públicos de España.
+
+Fuentes objetivo configuradas en SOOI:
+{target_sources_text}
+
+Instrucciones sobre fuentes:
+- Usa estas fuentes como referencia prioritaria para diversificar la búsqueda.
+- No te limites siempre a Idealista, Fotocasa o pisos.com si hay alternativas válidas.
+- Prioriza fuentes verificadas, pero puedes usar fuentes pendientes si el resultado es claro.
+- Para terrenos, solares o parcelas, intenta buscar también en Terrenos.es.
+- Para activos bancarios o servicers, intenta buscar también en Servihabitat, Solvia y Altamira.
+- Para vivienda general, intenta buscar también en Habitaclia y yaencontre.
+- Puedes usar otras fuentes públicas si aportan ficha individual real, pero deben ser trazables.
 
 Parámetros base:
 - Operación: {operation_text}
@@ -390,6 +436,7 @@ Devuelve SOLO JSON válido con esta estructura exacta:
         ai_prompt: str,
         variant_label: str,
         variant_focus: str,
+        target_sources_text: str,
     ) -> tuple[str, dict[str, Any], list[str], list[AIDiscoveryItem], str]:
         provider_name = provider_spec["name"]
         provider_code = provider_spec["provider_code"]
@@ -406,6 +453,7 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             ai_prompt=ai_prompt,
             variant_label=variant_label,
             variant_focus=variant_focus,
+            target_sources_text=target_sources_text,
         )
 
         if not provider_spec["api_key"]:
@@ -536,6 +584,8 @@ Devuelve SOLO JSON válido con esta estructura exacta:
         ai_prompt: str = "",
     ) -> AIDiscoveryResult:
         provider_specs = self._get_provider_specs()
+        target_sources = _get_active_target_sources()
+        target_sources_text = _format_target_sources_for_prompt(target_sources)
 
         search_variants = self._build_search_variants(
             operation_type=operation_type,
@@ -560,6 +610,7 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             "min_bedrooms": min_bedrooms,
             "ai_prompt": ai_prompt,
             "search_variants": search_variants,
+            "target_sources": target_sources,
         }
 
         if not provider_specs:
@@ -599,6 +650,7 @@ Devuelve SOLO JSON válido con esta estructura exacta:
                     ai_prompt=ai_prompt,
                     variant_label=variant["label"],
                     variant_focus=variant["focus"],
+                    target_sources_text=target_sources_text,
                 )
 
                 all_prompts.append(prompt)

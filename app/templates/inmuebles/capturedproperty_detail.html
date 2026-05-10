@@ -4,101 +4,173 @@
 {% block section_title %}Detalle de captación{% endblock %}
 
 {% block content %}
-  <div class="page-card">
-    <h1>{{ item.title }}</h1>
-    <p>Ficha base del inmueble captado dentro de la Bandeja de Captación.</p>
+  <div class="capture-detail-hero">
+    <div class="capture-detail-hero__main">
+      <div class="capture-detail-hero__eyebrow">
+        <span class="sooi-badge sooi-badge--method sooi-badge--{{ item.entry_mode }}">
+          {{ item.get_entry_mode_display }}
+        </span>
 
-    <div class="actions">
-      <a class="btn" href="{{ next_url }}">Volver a captación</a>
-      
-      <a class="btn" href="/app/captacion/{{ item.id }}/editar/?next={{ next_url|urlencode }}">Editar captación</a>
-      
-      {% if not item.is_interesting %}
-        <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/" style="display:inline;">
-          {% csrf_token %}
-          <button class="btn" type="submit">Marcar interesante</button>
-        </form>
-      {% endif %}
+        <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">
+          {{ item.get_status_display }}
+        </span>
 
-      {% if item.status != "in_review" %}
-        <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/" style="display:inline;">
-          {% csrf_token %}
-          <button class="btn" type="submit">Marcar en revisión</button>
-        </form>
-      {% endif %}
-
-      {% if existing_opportunity %}
-        <a class="btn btn-primary" href="/app/oportunidades/{{ existing_opportunity.id }}/">Ver oportunidad creada</a>
-      {% else %}
-        {% if not existing_opportunity %}
-          <form method="post" action="/app/captacion/{{ item.id }}/eliminar/" style="display:inline;">
-            {% csrf_token %}
-            <button class="btn" type="submit">Eliminar captación</button>
-          </form>
+        {% if item.is_interesting %}
+          <span class="sooi-badge sooi-badge--interest-yes">Interesante</span>
+        {% else %}
+          <span class="sooi-badge sooi-badge--interest-no">Sin marcar</span>
         {% endif %}
-        <form method="post" action="/app/captacion/{{ item.id }}/convertir/" style="display:inline;">
-          {% csrf_token %}
-          <button class="btn btn-primary" type="submit">Convertir en oportunidad</button>
-        </form>
-      {% endif %}
+      </div>
+
+      <h1>{{ item.title }}</h1>
+
+      <div class="capture-detail-hero__meta">
+        <span>{{ item.source.name }}</span>
+        <span>·</span>
+        <span>{{ item.get_operation_type_display }}</span>
+        <span>·</span>
+        <span>{{ item.get_property_type_display }}</span>
+        <span>·</span>
+        <span>
+          {% if item.municipality or item.province %}
+            {{ item.municipality }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}
+          {% else %}
+            Sin ubicación
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div class="capture-detail-hero__side">
+      <span>Precio</span>
+      <strong>{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</strong>
+      <small>Captado el {{ item.captured_at|date:"d/m/Y H:i" }}</small>
     </div>
   </div>
 
-  <div class="quick-grid" style="margin-top:18px;">
-    <div class="quick-card">
-      <h3>Método</h3>
-      <p>{{ item.get_entry_mode_display }}</p>
+  <div class="page-card capture-detail-actions">
+    <a class="btn" href="{{ next_url }}">Volver a captación</a>
+    <a class="btn" href="/app/captacion/{{ item.id }}/editar/?next={{ next_url|urlencode }}">Editar</a>
+
+    {% if item.source_url %}
+      <a class="btn" href="{{ item.source_url }}" target="_blank" rel="noopener">Abrir URL origen</a>
+    {% endif %}
+
+    {% if not item.is_interesting %}
+      <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
+        {% csrf_token %}
+        <button class="btn" type="submit">Marcar interesante</button>
+      </form>
+    {% endif %}
+
+    {% if item.status != "in_review" %}
+      <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/">
+        {% csrf_token %}
+        <button class="btn" type="submit">Marcar en revisión</button>
+      </form>
+    {% endif %}
+
+    {% if existing_opportunity %}
+      <a class="btn btn-primary" href="/app/oportunidades/{{ existing_opportunity.id }}/">Ver oportunidad</a>
+    {% else %}
+      <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Convertir en oportunidad</button>
+      </form>
+
+      <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Eliminar</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="capture-detail-grid">
+    <div class="capture-detail-panel">
+      <h2>Datos principales</h2>
+
+      <div class="capture-detail-fields">
+        <div>
+          <span>Dormitorios</span>
+          <strong>{{ item.bedrooms|default:"—" }}</strong>
+        </div>
+
+        <div>
+          <span>Baños</span>
+          <strong>{{ item.bathrooms|default:"—" }}</strong>
+        </div>
+
+        <div>
+          <span>Superficie</span>
+          <strong>{% if item.area_m2 %}{{ item.area_m2 }} m²{% else %}—{% endif %}</strong>
+        </div>
+
+        <div>
+          <span>Revisión</span>
+          <strong>{{ item.get_review_status_display }}</strong>
+        </div>
+
+        <div>
+          <span>Búsqueda</span>
+          <strong>{% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</strong>
+        </div>
+
+        <div>
+          <span>Fuente</span>
+          <strong>{{ item.source.name }}</strong>
+        </div>
+      </div>
     </div>
-    <div class="quick-card">
-      <h3>Fuente</h3>
-      <p>{{ item.source.name }}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Estado</h3>
-      <p>{{ item.get_status_display }}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Revisión</h3>
-      <p>{{ item.get_review_status_display }}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Operación</h3>
-      <p>{{ item.get_operation_type_display }}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Precio</h3>
-      <p>{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Ubicación</h3>
-      <p>{{ item.municipality|default:"" }}{% if item.municipality and item.province %}, {% endif %}{{ item.province|default:"—" }}</p>
-    </div>
-    <div class="quick-card">
-      <h3>Tipo</h3>
-      <p>{{ item.get_property_type_display }}</p>
+
+    <div class="capture-detail-panel">
+      <h2>Trazabilidad</h2>
+
+      <div class="capture-detail-trace">
+        <div>
+          <span>ID captación</span>
+          <strong>#{{ item.id }}</strong>
+        </div>
+
+        <div>
+          <span>Modo de entrada</span>
+          <strong>{{ item.get_entry_mode_display }}</strong>
+        </div>
+
+        <div>
+          <span>Última revisión</span>
+          <strong>{% if item.last_reviewed_at %}{{ item.last_reviewed_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</strong>
+        </div>
+
+        <div>
+          <span>URL origen</span>
+          {% if item.source_url %}
+            <a href="{{ item.source_url }}" target="_blank" rel="noopener">{{ item.source_url }}</a>
+          {% else %}
+            <strong>—</strong>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="page-card" style="margin-top:18px;">
-    <h1 style="font-size:22px;">Datos principales</h1>
-    <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-      <div><strong>Dormitorios:</strong> {{ item.bedrooms|default:"—" }}</div>
-      <div><strong>Baños:</strong> {{ item.bathrooms|default:"—" }}</div>
-      <div><strong>Superficie:</strong> {% if item.area_m2 %}{{ item.area_m2 }} m²{% else %}—{% endif %}</div>
-      <div><strong>Interesante:</strong> {% if item.is_interesting %}Sí{% else %}No{% endif %}</div>
-      <div><strong>Perfil de búsqueda:</strong> {% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</div>
-      <div><strong>URL origen:</strong> {% if item.source_url %}<a href="{{ item.source_url }}" target="_blank" rel="noopener">Abrir enlace</a>{% else %}—{% endif %}</div>
+  <div class="capture-detail-grid capture-detail-grid--text">
+    <div class="capture-detail-panel">
+      <h2>Descripción original</h2>
+      <p class="capture-detail-text">{{ item.description_raw|default:"Sin descripción." }}</p>
     </div>
-  </div>
 
-  <div class="page-card" style="margin-top:18px;">
-    <h1 style="font-size:22px;">Descripción original</h1>
-    <p style="margin-top:14px; white-space:pre-line;">{{ item.description_raw|default:"Sin descripción." }}</p>
-  </div>
+    <div class="capture-detail-panel">
+      <h2>IA y notas</h2>
 
-  <div class="page-card" style="margin-top:18px;">
-    <h1 style="font-size:22px;">IA y notas</h1>
-    <p style="margin-top:14px;"><strong>Resumen IA:</strong> {{ item.ai_summary|default:"—" }}</p>
-    <p style="margin-top:10px;"><strong>Notas manuales:</strong> {{ item.manual_notes|default:"—" }}</p>
+      <div class="capture-detail-note">
+        <span>Resumen IA</span>
+        <p>{{ item.ai_summary|default:"—" }}</p>
+      </div>
+
+      <div class="capture-detail-note">
+        <span>Notas manuales</span>
+        <p>{{ item.manual_notes|default:"—" }}</p>
+      </div>
+    </div>
   </div>
 {% endblock %}

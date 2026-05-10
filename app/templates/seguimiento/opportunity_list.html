@@ -4,19 +4,24 @@
 {% block section_title %}Oportunidades{% endblock %}
 
 {% block content %}
-  <div class="page-card">
-    <h1>Oportunidades</h1>
-    <p>Seguimiento real de inmuebles validados y convertidos en oportunidad operativa.</p>
+  <div class="opp-list-hero">
+    <div>
+      <h1>Oportunidades</h1>
+      <p>Seguimiento real de inmuebles validados y convertidos en oportunidad operativa.</p>
+    </div>
 
-    <div class="actions">
+    <div class="opp-list-hero__counter">
+      <span>Visibles</span>
+      <strong>{{ opportunities|length }}</strong>
+      <small>Según filtros actuales</small>
     </div>
   </div>
 
-  <div class="page-card" style="margin-top: 18px;">
-    <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+  <div class="opp-filter-card">
+    <form method="get" class="opp-filter-form">
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Búsqueda</label>
-        <select name="search_profile_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:220px;">
+        <label>Búsqueda</label>
+        <select name="search_profile_id">
           <option value="">Todas</option>
           {% for search in available_search_profiles %}
             <option value="{{ search.id }}" {% if current_search_profile_id == search.id|stringformat:"s" %}selected{% endif %}>
@@ -27,8 +32,8 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
-        <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Estado</label>
+        <select name="status">
           <option value="">Todos</option>
           {% for value, label in status_choices %}
             <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
@@ -37,8 +42,8 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Prioridad</label>
-        <select name="priority" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Prioridad</label>
+        <select name="priority">
           <option value="">Todas</option>
           {% for value, label in priority_choices %}
             <option value="{{ value }}" {% if current_priority == value %}selected{% endif %}>{{ label }}</option>
@@ -46,55 +51,115 @@
         </select>
       </div>
 
-      <div>
+      <div class="opp-filter-form__actions">
         <button class="btn btn-primary" type="submit">Filtrar</button>
         <a class="btn" href="/app/oportunidades/">Limpiar</a>
       </div>
     </form>
   </div>
 
-  <div class="page-card" style="margin-top: 18px;">
+  <div class="page-card opp-table-card">
     {% if opportunities %}
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse: collapse;">
+      <div class="opp-table-wrap">
+        <table class="opp-table">
           <thead>
-            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
-              <th style="padding:12px;">Título</th>
-              <th style="padding:12px;">Búsqueda</th>
-              <th style="padding:12px;">Estado</th>
-              <th style="padding:12px;">Prioridad</th>
-              <th style="padding:12px;">Precio actual</th>
-              <th style="padding:12px;">Precio objetivo</th>
-              <th style="padding:12px;">Siguiente acción</th>
-              <th style="padding:12px;">Contacto</th>
-              <th style="padding:12px;">Comercializadora</th>
-              <th style="padding:12px;">Acciones</th>
+            <tr>
+              <th>Título</th>
+              <th>Búsqueda</th>
+              <th>Estado</th>
+              <th>Prioridad</th>
+              <th>Precio</th>
+              <th>Rentabilidad</th>
+              <th>Siguiente acción</th>
+              <th>Revisión</th>
+              <th>Contacto</th>
+              <th>Acciones</th>
             </tr>
           </thead>
+
           <tbody>
             {% for item in opportunities %}
-              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
-                <td style="padding:12px; font-weight:600;">
-                  <a href="/app/oportunidades/{{ item.id }}/" style="color:inherit; text-decoration:none;">
-                    {{ item.title }}
-                  </a>
+              <tr>
+                <td class="opp-table__title">
+                  <a href="/app/oportunidades/{{ item.id }}/">{{ item.title }}</a>
+
+                  <div class="opp-table__meta">
+                    {% if item.source_name %}{{ item.source_name }} · {% endif %}
+                    {% if item.captured_property %}
+                      {{ item.captured_property.get_operation_type_display }} · {{ item.captured_property.get_property_type_display }}
+                    {% endif %}
+                  </div>
                 </td>
-                <td style="padding:12px;">
+
+                <td>
                   {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
                 </td>
-                <td style="padding:12px;">{{ item.get_status_display }}</td>
-                <td style="padding:12px;">{{ item.get_priority_display }}</td>
-                <td style="padding:12px;">{% if item.asking_price_current %}{{ item.asking_price_current }} €{% else %}—{% endif %}</td>
-                <td style="padding:12px;">{% if item.target_price_internal %}{{ item.target_price_internal }} €{% else %}—{% endif %}</td>
-                <td style="padding:12px;">{{ item.next_action|default:"—" }}</td>
-                <td style="padding:12px;">{% if item.main_contact %}{{ item.main_contact.full_name }}{% else %}—{% endif %}</td>
-                <td style="padding:12px;">{% if item.broker_company %}{{ item.broker_company.name }}{% else %}—{% endif %}</td>
-                <td style="padding:12px; white-space:nowrap;">
+
+                <td>
+                  <span class="opp-badge opp-badge--{{ item.status }}">{{ item.get_status_display }}</span>
+                </td>
+
+                <td>
+                  <span class="opp-badge opp-badge--priority-{{ item.priority }}">{{ item.get_priority_display }}</span>
+                </td>
+
+                <td class="opp-table__money">
+                  {% if item.asking_price_current %}{{ item.asking_price_current }} €{% else %}—{% endif %}
+                </td>
+
+                <td>
+                  {% if item.estimated_gross_yield %}
+                    <span class="opp-badge opp-badge--score">{{ item.estimated_gross_yield }} %</span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td>
+                  <strong>{{ item.get_next_action_type_display }}</strong>
+                  {% if item.next_action_notes %}
+                    <div class="opp-table__meta">{{ item.next_action_notes }}</div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if item.next_review_at %}
+                    <strong>{{ item.next_review_at|date:"d/m/Y" }}</strong>
+                    <div class="opp-table__meta">{{ item.next_review_at|date:"H:i" }}</div>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if item.main_contact %}
+                    <strong>{{ item.main_contact.full_name }}</strong>
+                  {% else %}
+                    —
+                  {% endif %}
+
+                  {% if item.broker_company %}
+                    <div class="opp-table__meta">{{ item.broker_company.name }}</div>
+                  {% endif %}
+                </td>
+
+                <td class="opp-table__actions-cell">
+                  <div class="opp-row-actions">
+                    <a class="opp-row-action" href="/app/oportunidades/{{ item.id }}/">Abrir</a>
+                    <a class="opp-row-action" href="/app/oportunidades/{{ item.id }}/editar/">Editar</a>
+
+                    {% if item.captured_property %}
+                      <a class="opp-row-action opp-row-action--primary" href="/app/captacion/{{ item.captured_property.id }}/">Origen</a>
+                    {% else %}
+                      <span class="opp-row-action-spacer"></span>
+                    {% endif %}
+                  </div>
+
                   <details class="action-menu">
                     <summary class="action-menu__trigger">⋯</summary>
-
                     <div class="action-menu__panel">
-                      <a class="action-menu__item" href="/app/oportunidades/{{ item.id }}/">Abrir</a>
+                      <a class="action-menu__item" href="/app/oportunidades/{{ item.id }}/">Abrir oportunidad</a>
+                      <a class="action-menu__item" href="/app/oportunidades/{{ item.id }}/editar/">Editar oportunidad</a>
 
                       {% if item.captured_property %}
                         <a class="action-menu__item" href="/app/captacion/{{ item.captured_property.id }}/">
@@ -102,6 +167,11 @@
                         </a>
                       {% endif %}
 
+                      {% if item.source_url %}
+                        <a class="action-menu__item" href="{{ item.source_url }}" target="_blank" rel="noopener">
+                          Abrir anuncio origen
+                        </a>
+                      {% endif %}
                     </div>
                   </details>
                 </td>
@@ -111,9 +181,11 @@
         </table>
       </div>
     {% else %}
-      <p style="margin-top:16px; color:#64748b;">Todavía no hay oportunidades para mostrar.</p>
-      <div class="actions">
-        </div>
+      <div class="opp-empty-state">
+        <h2>No hay oportunidades para mostrar</h2>
+        <p>Cuando conviertas una captación en oportunidad, aparecerá aquí para seguimiento operativo.</p>
+        <a class="btn btn-primary" href="/app/captacion/">Ir a Bandeja de Captación</a>
+      </div>
     {% endif %}
   </div>
 {% endblock %}

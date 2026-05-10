@@ -160,7 +160,7 @@
               <th style="padding:12px;">Encontrados</th>
               <th style="padding:12px;">Nuevos</th>
               <th style="padding:12px;">Actualizados</th>
-              <th style="padding:12px;">Errores</th>
+              <th style="padding:12px;">Descartes</th>
             </tr>
           </thead>
           <tbody>
@@ -175,7 +175,7 @@
                     <span class="run-status-badge run-status-badge--running">{{ run.get_status_display }}</span>
                   {% elif run.status == "pending" %}
                     <span class="run-status-badge run-status-badge--pending">{{ run.get_status_display }}</span>
-                  {% elif run.status == "failed" or run.status == "completed_with_errors" %}
+                  {% elif run.status == "failed" %}
                     <span class="run-status-badge run-status-badge--error">{{ run.get_status_display }}</span>
                   {% elif run.status == "completed" %}
                     <span class="run-status-badge run-status-badge--completed">{{ run.get_status_display }}</span>

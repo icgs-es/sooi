@@ -5,6 +5,8 @@ from apps.inmuebles.models import CapturedProperty
 from .ai_discovery import AIDiscoveryClient
 from .models import SearchProfile, SearchRun
 from urllib.parse import urlparse, urlunparse
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from django.utils.text import slugify
 import re
 import unicodedata
@@ -192,6 +194,29 @@ def _get_or_create_real_source(source_name: str, source_url: str) -> Source:
 
     return source
 
+
+def _is_trusted_property_portal_url(source_url: str) -> bool:
+    host = _extract_hostname(source_url)
+    trusted_hosts = {
+        "idealista.com",
+        "fotocasa.es",
+        "habitaclia.com",
+        "pisos.com",
+        "servihabitat.com",
+        "solvia.es",
+        "altamirainmuebles.com",
+        "yaencontre.com",
+    }
+
+    if host in trusted_hosts:
+        return True
+
+    return any(
+        host.endswith("." + trusted_host)
+        for trusted_host in trusted_hosts
+    )
+
+
 def _looks_like_property_detail_url(source_url: str) -> bool:
     if not source_url:
         return False
@@ -201,19 +226,145 @@ def _looks_like_property_detail_url(source_url: str) -> bool:
         return False
 
     host = _extract_hostname(source_url)
-    path = (parsed.path or "").strip().lower()
+    path = (parsed.path or "").strip().lower().rstrip("/")
 
     if not path or path == "/":
         return False
 
-    # Regla estricta inicial para Idealista:
-    # solo aceptamos fichas reales tipo /inmueble/123456789/
     if host == "idealista.com":
-        return "/inmueble/" in path
+        return re.search(r"/(?:[a-z]{2}/)?inmueble/\d+", path) is not None
 
-    # Regla mínima genérica para el resto:
-    # evitar URLs raíz/home/listados vacíos muy obvios
+    if host == "fotocasa.es":
+        return re.search(r"/\d+/d$", path) is not None
+
+    if host == "habitaclia.com" or host.endswith(".habitaclia.com"):
+        # Ficha real Habitaclia suele incluir id tipo -i123456789.htm.
+        # URLs como /rent-cartama.htm son listados/zona.
+        return re.search(r"-i\d+\.htm$", path) is not None
+
+    if host == "pisos.com":
+        return (
+            ("/comprar/" in path or "/alquilar/" in path)
+            and re.search(r"[_-]\d{5,}(?:_\d{3,})?$", path) is not None
+        )
+
+    if host == "servihabitat.com":
+        return (
+            ("/venta/" in path or "/alquiler/" in path)
+            and re.search(r"/\d{6,}$", path) is not None
+        )
+
     return True
+
+
+def _fetch_url_probe(source_url: str) -> tuple[int, str, str, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 SOOI/2.0 URLValidator",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    }
+    request = Request(source_url, headers=headers)
+
+    try:
+        with urlopen(request, timeout=5) as response:
+            status = getattr(response, "status", response.getcode())
+            final_url = response.geturl()
+            raw = response.read(250000)
+            html = raw.decode("utf-8", errors="ignore").lower()
+            return status, final_url, html, ""
+    except HTTPError as exc:
+        try:
+            raw = exc.read(120000)
+            html = raw.decode("utf-8", errors="ignore").lower()
+        except Exception:
+            html = ""
+        return exc.code, source_url, html, ""
+    except (URLError, TimeoutError, ValueError) as exc:
+        return 0, source_url, "", exc.__class__.__name__
+
+
+def _validate_property_source_url(source_url: str) -> tuple[bool, str]:
+    normalized_url = _normalize_property_url(source_url) or source_url
+
+    if not _looks_like_property_detail_url(normalized_url):
+        return False, "url no parece ficha real"
+
+    status_code, final_url, html, error = _fetch_url_probe(normalized_url)
+
+    if error:
+        if _is_trusted_property_portal_url(normalized_url):
+            return True, f"ok: ficha real de portal conocido, no verificable automáticamente por {error}"
+        return False, f"bloqueada o no verificable: {error}"
+
+    if status_code in {404, 410}:
+        return False, f"http {status_code}: página inexistente"
+
+    if status_code >= 400:
+        if status_code == 403:
+            if _is_trusted_property_portal_url(normalized_url):
+                return True, "ok: ficha real de portal conocido, bloqueada por protección anti-bot"
+            return False, "no verificable por bloqueo del portal"
+        return False, f"http {status_code}: no accesible"
+
+    final_normalized_url = _normalize_property_url(final_url) or final_url
+    if final_normalized_url and not _looks_like_property_detail_url(final_normalized_url):
+        return False, "redirige a una página que no parece ficha real"
+
+    html = html or ""
+
+    if len(html.strip()) < 500:
+        return False, "contenido insuficiente"
+
+    unpublished_markers = [
+        "este anuncio ya no está publicado",
+        "este anuncio ya no esta publicado",
+        "anuncio ya no está publicado",
+        "anuncio ya no esta publicado",
+        "el anunciante lo dio de baja",
+        "no corresponde a ninguna página",
+        "no corresponde a ninguna pagina",
+        "does not correspond to any page",
+        "page not found",
+        "not found",
+        "404",
+    ]
+
+    if any(marker in html for marker in unpublished_markers):
+        return False, "anuncio no publicado o página inexistente"
+
+    listing_markers = [
+        ("guardar búsqueda", "ordenar por"),
+        ("guardar busqueda", "ordenar por"),
+        ("resultados", "ordenar por"),
+        ("alquiler de pisos en", "resultados"),
+        ("venta de pisos en", "resultados"),
+        ("alquiler de casas en", "resultados"),
+        ("venta de casas en", "resultados"),
+        ("búsqueda clásica", "búsqueda por ia"),
+        ("busqueda clasica", "busqueda por ia"),
+        ("ver mapa", "guardar búsqueda"),
+        ("ver mapa", "guardar busqueda"),
+    ]
+
+    for marker_a, marker_b in listing_markers:
+        if marker_a in html and marker_b in html:
+            return False, "página de listado o búsqueda"
+
+    active_hints = [
+        "€",
+        "m²",
+        "m2",
+        "habitaciones",
+        "dormitorios",
+        "baño",
+        "baños",
+        "contactar",
+        "referencia",
+    ]
+
+    if not any(marker in html for marker in active_hints):
+        return False, "sin señales mínimas de anuncio activo"
+
+    return True, "ok"
 
 
 def _build_capture_warning(idx: int, reason: str, source_url: str = "") -> str:
@@ -389,6 +540,41 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
         "updated_at",
     ])
 
+    provider_statuses = [
+        search.get("status")
+        for search in (result.raw_response or {}).get("searches", [])
+    ]
+    blocking_statuses = {"quota", "config", "unsupported", "provider_error", "rate_limit"}
+
+    if not result.items and (
+        result.provider == "unconfigured"
+        or any(status in blocking_statuses for status in provider_statuses)
+    ):
+        run.status = SearchRun.Status.FAILED
+        run.finished_at = timezone.now()
+        run.total_candidates = 0
+        run.total_valid_candidates = 0
+        run.total_found = 0
+        run.total_new = 0
+        run.total_updated = 0
+        run.total_errors = 0
+        run.error_message = "; ".join(run.warnings or [])[:2000]
+        run.run_notes = "Ejecución IA no realizada por incidencia del proveedor."
+        run.save(update_fields=[
+            "status",
+            "finished_at",
+            "total_candidates",
+            "total_valid_candidates",
+            "total_found",
+            "total_new",
+            "total_updated",
+            "total_errors",
+            "error_message",
+            "run_notes",
+            "updated_at",
+        ])
+        return run
+
     total_candidates = len(result.items)
     total_valid_candidates = 0
     total_new = 0
@@ -403,10 +589,81 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
             ]
             continue
 
-        if not _looks_like_property_detail_url(item.source_url):
+        if search_profile.min_price is not None and item.price is None:
             total_errors += 1
             run.warnings = list(run.warnings or []) + [
-                _build_capture_warning(idx, "url no parece ficha real", item.source_url)
+                _build_capture_warning(idx, "precio no informado y hay precio mínimo configurado", item.source_url)
+            ]
+            continue
+
+        if search_profile.max_price is not None and item.price is None:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, "precio no informado y hay precio máximo configurado", item.source_url)
+            ]
+            continue
+
+        if search_profile.min_price is not None and item.price is not None and item.price < search_profile.min_price:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, f"precio inferior al mínimo configurado ({item.price} < {search_profile.min_price})", item.source_url)
+            ]
+            continue
+
+        if search_profile.max_price is not None and item.price is not None and item.price > search_profile.max_price:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, f"precio superior al máximo configurado ({item.price} > {search_profile.max_price})", item.source_url)
+            ]
+            continue
+
+        if search_profile.min_bedrooms is not None and item.bedrooms is None:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, "dormitorios no informados y hay mínimo configurado", item.source_url)
+            ]
+            continue
+
+        if search_profile.min_bedrooms is not None and item.bedrooms is not None and item.bedrooms < search_profile.min_bedrooms:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, f"dormitorios por debajo del mínimo ({item.bedrooms} < {search_profile.min_bedrooms})", item.source_url)
+            ]
+            continue
+
+        if search_profile.min_area_m2 is not None and item.area_m2 is None:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, "superficie no informada y hay metros mínimos configurados", item.source_url)
+            ]
+            continue
+
+        if search_profile.min_area_m2 is not None and item.area_m2 is not None and item.area_m2 < search_profile.min_area_m2:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, f"superficie inferior al mínimo ({item.area_m2} < {search_profile.min_area_m2})", item.source_url)
+            ]
+            continue
+
+        allowed_types = search_profile.property_types or []
+        if allowed_types and item.property_type not in allowed_types:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, f"tipología fuera de filtros ({item.property_type})", item.source_url)
+            ]
+            continue
+
+        validation_url = _normalize_property_url(item.source_url) or item.source_url
+        is_valid_url, validation_reason = _validate_property_source_url(validation_url)
+
+        if not is_valid_url:
+            total_errors += 1
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(
+                    idx,
+                    f"url descartada: {validation_reason}",
+                    validation_url,
+                )
             ]
             continue
 
@@ -431,41 +688,66 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
             external_id=external_id,
         )
 
-        _, created = CapturedProperty.objects.update_or_create(
+        defaults = {
+            "owner": search_profile.owner,
+            "search_profile": search_profile,
+            "search_run": run,
+            "entry_mode": CapturedProperty.EntryMode.AI_EXPLORATION,
+            "title": item.title,
+            "description_raw": item.summary,
+            "province": item.province or search_profile.province,
+            "municipality": item.municipality or "",
+            "zone_text": zone_text,
+            "property_type": item.property_type or (
+                (search_profile.property_types or [CapturedProperty.PropertyType.FLAT])[0]
+            ),
+            "operation_type": search_profile.operation_type,
+            "price": item.price,
+            "bedrooms": item.bedrooms,
+            "bathrooms": item.bathrooms,
+            "area_m2": item.area_m2,
+            "status": CapturedProperty.Status.CAPTURED,
+            "review_status": CapturedProperty.ReviewStatus.PENDING,
+            "source_url": normalized_url or item.source_url,
+            "possible_duplicate": possible_duplicate,
+            "last_seen_at": timezone.now(),
+        }
+
+        existing = CapturedProperty.objects.filter(
             source=source,
             source_external_id=external_id,
-            defaults={
-                "owner": search_profile.owner,
-                "search_profile": search_profile,
-                "search_run": run,
-                "entry_mode": CapturedProperty.EntryMode.AI_EXPLORATION,
-                "title": item.title,
-                "description_raw": item.summary,
-                "province": item.province or search_profile.province,
-                "municipality": item.municipality or "",
-                "zone_text": zone_text,
-                "property_type": item.property_type or (
-                    (search_profile.property_types or [CapturedProperty.PropertyType.FLAT])[0]
-                ),
-                "operation_type": search_profile.operation_type,
-                "price": item.price,
-                "bedrooms": item.bedrooms,
-                "bathrooms": item.bathrooms,
-                "area_m2": item.area_m2,
-                "status": CapturedProperty.Status.CAPTURED,
-                "review_status": CapturedProperty.ReviewStatus.PENDING,
-                "source_url": normalized_url or item.source_url,
-                "possible_duplicate": possible_duplicate,
-                "last_seen_at": timezone.now(),
-            },
-        )
+            owner=search_profile.owner,
+        ).first()
+
+        if existing is None and normalized_url:
+            for candidate in CapturedProperty.objects.filter(
+                source=source,
+                owner=search_profile.owner,
+            ).only("id", "source_url", "source_external_id"):
+                if _normalize_property_url(candidate.source_url) == normalized_url:
+                    existing = candidate
+                    break
+
+        if existing is not None:
+            for field, value in defaults.items():
+                setattr(existing, field, value)
+            existing.source_external_id = external_id
+            existing.save()
+            created = False
+        else:
+            CapturedProperty.objects.create(
+                source=source,
+                source_external_id=external_id,
+                **defaults,
+            )
+            created = True
 
         if created:
             total_new += 1
         else:
             total_updated += 1
 
-    run.status = SearchRun.Status.COMPLETED if total_errors == 0 else SearchRun.Status.COMPLETED_WITH_ERRORS
+    run.status = SearchRun.Status.COMPLETED
     run.finished_at = timezone.now()
     run.total_candidates = total_candidates
     run.total_valid_candidates = total_valid_candidates

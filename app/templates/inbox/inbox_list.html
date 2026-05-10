@@ -1,0 +1,103 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Inbox Email | SOOI{% endblock %}
+{% block section_title %}Inbox Email{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Inbox Email</h1>
+    <p>Bandeja operativa para revisar correos y convertirlos en captaciones.</p>
+
+    <div class="actions">
+      <form method="post" action="/app/inbox/sincronizar/" style="display:inline;">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Actualizar bandeja</button>
+      </form>
+      <a class="btn" href="/app/inbox/cuentas/">Configurar cuentas</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Búsqueda</label>
+        <select name="search_profile_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:220px;">
+          <option value="">Todas</option>
+          {% for search in available_search_profiles %}
+            <option value="{{ search.id }}" {% if current_search_profile_id == search.id|stringformat:"s" %}selected{% endif %}>{{ search.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
+        <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+          <option value="" {% if not current_status %}selected{% endif %}>Nuevos</option>
+          <option value="all" {% if current_status == "all" %}selected{% endif %}>Todos</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+        <a class="btn" href="/app/inbox/">Limpiar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    {% if items %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
+              <th style="padding:12px;">Asunto</th>
+              <th style="padding:12px;">Remitente</th>
+              <th style="padding:12px;">Estado</th>
+              <th style="padding:12px;">Búsqueda</th>
+              <th style="padding:12px;">Recibido</th>
+              <th style="padding:12px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
+                <td style="padding:12px; font-weight:600;">
+                  <a href="/app/inbox/emails/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                    {{ item.subject|default:"(Sin asunto)" }}
+                  </a>
+                  {% if item.snippet %}
+                    <div style="font-weight:400; color:#64748b; margin-top:4px;">{{ item.snippet|truncatechars:120 }}</div>
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{{ item.from_email|default:"—" }}</td>
+                <td style="padding:12px;">{{ item.get_status_display }}</td>
+                <td style="padding:12px;">
+                  {% if item.search_profile %}
+                    {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="padding:12px;">{% if item.received_at %}{{ item.received_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+                <td style="padding:12px; white-space:nowrap;">
+                  <a class="btn" href="/app/inbox/emails/{{ item.id }}/">Ver</a>
+                  {% if item.status != "converted" and item.status != "discarded" %}
+                    <form method="post" action="/app/inbox/emails/{{ item.id }}/descartar/" style="display:inline;">
+                      {% csrf_token %}
+                      <button class="btn" type="submit">Descartar</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">Todavía no hay emails importados.</p>
+    {% endif %}
+  </div>
+{% endblock %}

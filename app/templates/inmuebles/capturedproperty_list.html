@@ -13,6 +13,44 @@
     </div>
   </div>
 
+  <div class="capture-summary-grid">
+    <div class="capture-summary-card">
+      <span>Visibles</span>
+      <strong>{{ capture_summary.visible }}</strong>
+      <small>Según filtros actuales</small>
+    </div>
+
+    <div class="capture-summary-card capture-summary-card--blue">
+      <span>Interesantes</span>
+      <strong>{{ capture_summary.interesting }}</strong>
+      <small>Marcadas como relevantes</small>
+    </div>
+
+    <div class="capture-summary-card capture-summary-card--amber">
+      <span>En revisión</span>
+      <strong>{{ capture_summary.in_review }}</strong>
+      <small>Pendientes de análisis</small>
+    </div>
+
+    <div class="capture-summary-card capture-summary-card--green">
+      <span>Convertidas</span>
+      <strong>{{ capture_summary.converted }}</strong>
+      <small>Ya son oportunidades</small>
+    </div>
+
+    <div class="capture-summary-card">
+      <span>Email</span>
+      <strong>{{ capture_summary.email }}</strong>
+      <small>Entradas desde inbox</small>
+    </div>
+
+    <div class="capture-summary-card">
+      <span>IA</span>
+      <strong>{{ capture_summary.ai }}</strong>
+      <small>Exploración automática</small>
+    </div>
+  </div>
+
   <div class="page-card" style="margin-top: 18px;">
     <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
       <div>
@@ -167,7 +205,11 @@
                     </div>
                   {% endif %}
                 </td>
-                <td style="padding:12px;">{{ item.get_entry_mode_display }}</td>
+                <td style="padding:12px;">
+                  <span class="sooi-badge sooi-badge--method sooi-badge--{{ item.entry_mode }}">
+                    {{ item.get_entry_mode_display }}
+                  </span>
+                </td>
                 <td style="padding:12px;">{{ item.source.name }}</td>
                 <td style="padding:12px;">
                   {% if item.municipality or item.province %}
@@ -178,12 +220,49 @@
                 </td>
                 <td style="padding:12px;">{{ item.get_operation_type_display }}</td>
                 <td style="padding:12px;">{{ item.get_property_type_display }}</td>
-                <td style="padding:12px;">
+                <td style="padding:12px; white-space:nowrap; font-weight:700;">
                   {% if item.price %}{{ item.price }} €{% else %}—{% endif %}
                 </td>
-                <td style="padding:12px;">{{ item.get_status_display }}</td>
-                <td style="padding:12px;">{% if item.is_interesting %}Sí{% else %}No{% endif %}</td>
+                <td style="padding:12px;">
+                  <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">
+                    {{ item.get_status_display }}
+                  </span>
+                </td>
+                <td style="padding:12px;">
+                  {% if item.is_interesting %}
+                    <span class="sooi-badge sooi-badge--interest-yes">Sí</span>
+                  {% else %}
+                    <span class="sooi-badge sooi-badge--interest-no">No</span>
+                  {% endif %}
+                </td>
                 <td style="padding:12px; white-space:nowrap;">
+                  <div class="capture-row-actions">
+                    <a class="capture-row-action" href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}">
+                      Abrir
+                    </a>
+
+                    {% if not item.is_interesting %}
+                      <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="capture-row-action" type="submit">Interesante</button>
+                      </form>
+                    {% else %}
+                      <span class="capture-row-action-spacer" aria-hidden="true"></span>
+                    {% endif %}
+
+                    {% if item.existing_opportunity %}
+                      <a class="capture-row-action capture-row-action--primary" href="/app/oportunidades/{{ item.existing_opportunity.id }}/">
+                        Oportunidad
+                      </a>
+                    {% else %}
+                      <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
+                        {% csrf_token %}
+                        <button class="capture-row-action capture-row-action--primary" type="submit">Convertir</button>
+                      </form>
+                    {% endif %}
+                  </div>
+
                   <details class="action-menu">
                     <summary class="action-menu__trigger">⋯</summary>
 

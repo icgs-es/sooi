@@ -3,49 +3,45 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-.pytest_cache/
-.mypy_cache/
-.coverage
-htmlcov/
+.Python
+*.sqlite3
+*.db
 
-# Virtualenv
-.venv/
-venv/
-env/
-
-# Django
+# Django/runtime
 *.log
-local_settings.py
-db.sqlite3
+.env
+.env.*
 media/
 uploads/
 staticfiles/
-static_collected/
+.vol/
+vol/
 
-# Secrets / env
-.env
-.env.*
-!.env.example
+# SOOI local/runtime
+logs/
+backups/
+_incoming/
 
-# Docker / runtime
+# Infra secrets
+infra/env/
+infra/**/*.env
+infra/**/*.secret
+infra/**/*.pem
+infra/**/*.key
+
+# Docker/runtime
 *.pid
 *.sock
-docker-data/
-volumes/
-postgres_data/
-redis_data/
 
-# Backups / dumps
-backups/
-*.dump
-*.sql
-*.sql.gz
-*.tar
-*.tar.gz
-*.zip
-
-# OS / editor
+# OS/editor
 .DS_Store
-Thumbs.db
 .vscode/
 .idea/
+
+
+# Local backup files created during live patching
+*.bak
+*.bak_*
+*.bak-*
+*.backup
+*.orig

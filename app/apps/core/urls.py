@@ -13,6 +13,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("app/inbox/", include("apps.inbox.urls")),
     path("", home, name="home"),
     path("solicitar-demo/", demo_request, name="demo_request"),
     path("privacidad/", privacy_policy, name="privacy_policy"),

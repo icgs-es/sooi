@@ -1,0 +1,63 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Cuentas Email | SOOI{% endblock %}
+{% block section_title %}Cuentas Email{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Cuentas de email</h1>
+    <p>Configura buzones IMAP que SOOI usará como canal selectivo de entrada.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/inbox/">Volver al inbox</a>
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Nueva cuenta</h1>
+
+      <form method="post" style="margin-top:14px;">
+        {% csrf_token %}
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          {% for field in form %}
+            <div>
+              <label style="display:block; font-weight:600; margin-bottom:6px;">{{ field.label }}</label>
+              {{ field }}
+              {{ field.errors }}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div style="margin-top:14px;">
+          <button class="btn btn-primary" type="submit">Guardar cuenta</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Cuentas configuradas</h1>
+
+      {% if items %}
+        <div style="margin-top:14px;">
+          {% for item in items %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:700;">{{ item.name }}</div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {{ item.email_address }} · {{ item.provider_label|default:"Sin proveedor" }}
+              </div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {% if item.is_active %}Activa{% else %}Inactiva{% endif %}
+                · Última sync:
+                {% if item.last_sync_at %}{{ item.last_sync_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">No hay cuentas configuradas.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

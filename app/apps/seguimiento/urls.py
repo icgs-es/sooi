@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    agenda_view,
     alert_detail,
     alert_list_create,
     alert_delete,
@@ -10,22 +11,31 @@ from .views import (
     opportunity_list,
     opportunity_delete,
     opportunity_add_activity,
+    opportunity_quick_action,
+    opportunity_schedule_review,
+    opportunity_complete_review,
     task_detail,
     task_list,
     task_delete,
+    task_mark_done,
     broker_company_list_create,
     opportunity_contact_list_create,
 )
 
 urlpatterns = [
+    path("agenda/", agenda_view, name="agenda_view"),
     path("oportunidades/", opportunity_list, name="opportunity_list"),
     path("oportunidades/<int:pk>/", opportunity_detail, name="opportunity_detail"),
     path("oportunidades/<int:pk>/editar/", opportunity_edit, name="opportunity_edit"),
     path("oportunidades/<int:pk>/actividad/", opportunity_add_activity, name="opportunity_add_activity"),
+    path("oportunidades/<int:pk>/accion/<str:action_type>/", opportunity_quick_action, name="opportunity_quick_action"),
+    path("oportunidades/<int:pk>/programar-revision/<int:days>/", opportunity_schedule_review, name="opportunity_schedule_review"),
+    path("oportunidades/<int:pk>/revision-realizada/", opportunity_complete_review, name="opportunity_complete_review"),
     path("oportunidades/<int:pk>/eliminar/", opportunity_delete, name="opportunity_delete"),
     path("contactos-oportunidad/", opportunity_contact_list_create, name="opportunity_contact_list"),
     path("tareas/", task_list, name="task_list"),
     path("tareas/<int:pk>/", task_detail, name="task_detail"),
+    path("tareas/<int:pk>/hecha/", task_mark_done, name="task_mark_done"),
     path("tareas/<int:pk>/eliminar/", task_delete, name="task_delete"),
     path("alertas/", alert_list_create, name="alert_list"),
     path("alertas/<int:pk>/", alert_detail, name="alert_detail"),

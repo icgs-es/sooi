@@ -8,6 +8,7 @@ class CapturedProperty(models.Model):
         STRUCTURED_CAPTURE = "structured_capture", "Captación estructurada"
         AI_EXPLORATION = "ai_exploration", "Exploración IA"
         MANUAL = "manual", "Manual"
+        EMAIL = "email", "Email"
 
     class OperationType(models.TextChoices):
         SALE = "sale", "Venta"

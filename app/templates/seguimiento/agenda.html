@@ -1,0 +1,206 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Agenda | SOOI{% endblock %}
+{% block section_title %}Agenda operativa{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>Agenda operativa</h1>
+    <p>
+      Seguimiento centralizado de tareas y revisiones de oportunidades.
+      Ventana actual: próximos 30 días.
+    </p>
+
+    <div class="actions">
+      <a class="btn" href="/app/tareas/">Ver tareas</a>
+      <a class="btn" href="/app/oportunidades/">Ver oportunidades</a>
+    </div>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Calendario próximos 14 días</h1>
+    <p style="margin-top:8px; color:#64748b;">
+      Vista rápida por día de tareas y revisiones programadas.
+    </p>
+
+    <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:12px; margin-top:16px;">
+      {% for day in calendar_days %}
+        <div style="border:1px solid #e2e8f0; border-radius:14px; padding:12px; min-height:150px; background:#fff;">
+          <div style="font-weight:800; margin-bottom:8px;">
+            {{ day.date|date:"D d/m" }}
+          </div>
+
+          {% if day.tasks or day.opportunities %}
+            {% for task in day.tasks %}
+              <div style="padding:8px; border-radius:10px; background:#f8fafc; margin-bottom:8px; border:1px solid #e2e8f0;">
+                <div style="font-size:12px; color:#475569; font-weight:700;">Tarea</div>
+                <a href="/app/tareas/{{ task.id }}/" style="display:block; margin-top:3px; font-weight:700; color:inherit; text-decoration:none;">
+                  {{ task.title|truncatechars:55 }}
+                </a>
+                <div style="font-size:12px; color:#64748b; margin-top:3px;">
+                  {{ task.due_date|date:"H:i" }} · {{ task.get_priority_display }}
+                </div>
+                <form method="post" action="/app/tareas/{{ task.id }}/hecha/" style="margin-top:8px;">
+                  {% csrf_token %}
+                  <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">{% if task.task_type == "review" %}Revisión realizada{% else %}Completar tarea{% endif %}</button>
+                </form>
+              </div>
+            {% endfor %}
+
+            {% for item in day.opportunities %}
+              <div style="padding:8px; border-radius:10px; background:#fff7ed; margin-bottom:8px; border:1px solid #fed7aa;">
+                <div style="font-size:12px; color:#9a3412; font-weight:700;">Revisión</div>
+                <a href="/app/oportunidades/{{ item.id }}/" style="display:block; margin-top:3px; font-weight:700; color:inherit; text-decoration:none;">
+                  {{ item.title|truncatechars:55 }}
+                </a>
+                <div style="font-size:12px; color:#64748b; margin-top:3px;">
+                  {{ item.next_review_at|date:"H:i" }} · {{ item.get_priority_display }}
+                </div>
+                <form method="post" action="/app/oportunidades/{{ item.id }}/revision-realizada/" style="margin-top:8px;">
+                  {% csrf_token %}
+                  <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">Revisión realizada</button>
+                </form>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p style="font-size:13px; color:#94a3b8; margin-top:12px;">Sin eventos.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Tareas vencidas</h1>
+
+      {% if overdue_tasks %}
+        <div style="margin-top:14px;">
+          {% for task in overdue_tasks %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:700;">
+                <a href="/app/tareas/{{ task.id }}/" style="color:inherit; text-decoration:none;">
+                  {{ task.title }}
+                </a>
+              </div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {{ task.get_task_type_display }} · {{ task.get_priority_display }} · {{ task.due_date|date:"d/m/Y H:i" }}
+              </div>
+              <form method="post" action="/app/tareas/{{ task.id }}/hecha/" style="margin-top:8px;">
+                {% csrf_token %}
+                <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">{% if task.task_type == "review" %}Revisión realizada{% else %}Completar tarea{% endif %}</button>
+              </form>
+              {% if task.property_opportunity %}
+                <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                  Oportunidad:
+                  <a href="/app/oportunidades/{{ task.property_opportunity.id }}/">
+                    {{ task.property_opportunity.title }}
+                  </a>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">No hay tareas vencidas.</p>
+      {% endif %}
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Tareas próximas</h1>
+
+      {% if upcoming_tasks %}
+        <div style="margin-top:14px;">
+          {% for task in upcoming_tasks %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:700;">
+                <a href="/app/tareas/{{ task.id }}/" style="color:inherit; text-decoration:none;">
+                  {{ task.title }}
+                </a>
+              </div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {{ task.get_task_type_display }} · {{ task.get_priority_display }} · {{ task.due_date|date:"d/m/Y H:i" }}
+              </div>
+              <form method="post" action="/app/tareas/{{ task.id }}/hecha/" style="margin-top:8px;">
+                {% csrf_token %}
+                <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">{% if task.task_type == "review" %}Revisión realizada{% else %}Completar tarea{% endif %}</button>
+              </form>
+              {% if task.property_opportunity %}
+                <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                  Oportunidad:
+                  <a href="/app/oportunidades/{{ task.property_opportunity.id }}/">
+                    {{ task.property_opportunity.title }}
+                  </a>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">No hay tareas próximas en los próximos 30 días.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="page-card">
+      <h1 style="font-size:22px;">Revisiones vencidas</h1>
+
+      {% if overdue_opportunities %}
+        <div style="margin-top:14px;">
+          {% for item in overdue_opportunities %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:700;">
+                <a href="/app/oportunidades/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                  {{ item.title }}
+                </a>
+              </div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {{ item.get_status_display }} · {{ item.get_priority_display }} · {{ item.next_review_at|date:"d/m/Y H:i" }}
+              </div>
+              <form method="post" action="/app/oportunidades/{{ item.id }}/revision-realizada/" style="margin-top:8px;">
+                {% csrf_token %}
+                <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">Revisión realizada</button>
+              </form>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">No hay revisiones vencidas.</p>
+      {% endif %}
+    </div>
+
+    <div class="page-card">
+      <h1 style="font-size:22px;">Revisiones próximas</h1>
+
+      {% if upcoming_opportunities %}
+        <div style="margin-top:14px;">
+          {% for item in upcoming_opportunities %}
+            <div style="padding:12px 0; border-bottom:1px solid #eef2f7;">
+              <div style="font-weight:700;">
+                <a href="/app/oportunidades/{{ item.id }}/" style="color:inherit; text-decoration:none;">
+                  {{ item.title }}
+                </a>
+              </div>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {{ item.get_status_display }} · {{ item.get_priority_display }} · {{ item.next_review_at|date:"d/m/Y H:i" }}
+              </div>
+              <form method="post" action="/app/oportunidades/{{ item.id }}/revision-realizada/" style="margin-top:8px;">
+                {% csrf_token %}
+                <button class="btn" type="submit" style="padding:6px 10px; font-size:12px;">Revisión realizada</button>
+              </form>
+              <div style="font-size:14px; color:#64748b; margin-top:4px;">
+                {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="margin-top:14px; color:#64748b;">No hay revisiones próximas en los próximos 30 días.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -9,6 +9,7 @@
     <p>Acciones pendientes reales sobre inmuebles captados y oportunidades.</p>
 
     <div class="actions">
+      <a class="btn" href="/app/agenda/">Ver agenda</a>
     </div>
   </div>
 
@@ -27,7 +28,8 @@
       <div>
         <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
         <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
-          <option value="">Todos</option>
+          <option value="" {% if not current_status %}selected{% endif %}>Pendientes</option>
+          <option value="all" {% if current_status == "all" %}selected{% endif %}>Todas</option>
           {% for value, label in status_choices %}
             <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}

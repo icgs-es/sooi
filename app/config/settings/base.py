@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.busquedas",
     "apps.inmuebles",
     "apps.seguimiento",
+    "apps.inbox",
     "apps.ia",
 ]
 

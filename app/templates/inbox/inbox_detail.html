@@ -1,0 +1,99 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Email recibido | SOOI{% endblock %}
+{% block section_title %}Email recibido{% endblock %}
+
+{% block content %}
+  <div class="page-card">
+    <h1>{{ item.subject|default:"(Sin asunto)" }}</h1>
+    <p>Email recibido en {{ item.account.email_address }}.</p>
+
+    <div class="actions">
+      <a class="btn" href="/app/inbox/">Volver al inbox</a>
+
+      {% if item.status != "converted" and item.status != "discarded" %}
+        <form method="post" action="/app/inbox/emails/{{ item.id }}/descartar/" style="display:inline;">
+          {% csrf_token %}
+          <button class="btn" type="submit">Descartar email</button>
+        </form>
+      {% endif %}
+
+      {% if item.captured_property %}
+        <a class="btn" href="/app/captacion/{{ item.captured_property.id }}/">Ver captación creada</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="quick-grid" style="margin-top:18px;">
+    <div class="quick-card">
+      <h3>Estado</h3>
+      <p>{{ item.get_status_display }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Remitente</h3>
+      <p>{{ item.from_email|default:"—" }}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Recibido</h3>
+      <p>{% if item.received_at %}{{ item.received_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</p>
+    </div>
+    <div class="quick-card">
+      <h3>Expediente</h3>
+      <p>{% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</p>
+    </div>
+  </div>
+
+  {% if not item.captured_property %}
+    <div class="page-card" style="margin-top:18px;">
+      <h1 style="font-size:22px;">Convertir email en captación</h1>
+      <p style="margin-top:8px; color:#64748b;">
+        Crea una captación operativa vinculada a una búsqueda. Evita copiar contenido completo del anuncio.
+      </p>
+
+      <form method="post" action="/app/inbox/emails/{{ item.id }}/convertir-captacion/" style="margin-top:14px;">
+        {% csrf_token %}
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          {% for field in convert_form %}
+            <div>
+              <label style="display:block; font-weight:600; margin-bottom:6px;">{{ field.label }}</label>
+              {{ field }}
+
+              {% if field.name == "source_url" and field.value %}
+                <div style="margin-top:8px;">
+                  <a class="btn" href="{{ field.value }}" target="_blank" rel="noopener">
+                    Abrir URL detectada
+                  </a>
+                </div>
+              {% endif %}
+
+              {{ field.errors }}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div style="margin-top:14px;">
+          <button class="btn btn-primary" type="submit">Crear captación desde email</button>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">Cuerpo del email</h1>
+    <p style="margin-top:14px; white-space:pre-line;">{{ item.body_text|default:item.snippet|default:"Sin contenido." }}</p>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;">
+    <h1 style="font-size:22px;">URLs detectadas</h1>
+    {% if item.detected_urls %}
+      <ul style="margin-top:14px;">
+        {% for url in item.detected_urls %}
+          <li style="word-break:break-word;"><a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p style="margin-top:14px; color:#64748b;">No hay URLs detectadas.</p>
+    {% endif %}
+  </div>
+{% endblock %}
