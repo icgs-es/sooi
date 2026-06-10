@@ -383,7 +383,14 @@ def _source_url_rules_v2616(spec: SourceSpec) -> str:
     return "Regla URL: prioriza ficha individual concreta de inmueble; nunca listados ni páginas genéricas."
 
 def _openai_prompt(spec: SourceSpec, ctx: dict[str, Any], max_results: int) -> str:
-    domains = " OR ".join([f"site:{d}" for d in spec.domains])
+    if spec.slug == "idealista":
+        domains = f"{', '.join(spec.domains)} — devuelve solo URLs de este dominio si las encuentras"
+        domain_header = "Dominio objetivo (preferido, no restrictivo):"
+        domain_rule = "Devuelve solo URLs de idealista.com. Si no encuentras fichas reales de idealista, devuelve []."
+    else:
+        domains = " OR ".join([f"site:{d}" for d in spec.domains])
+        domain_header = "Restricción obligatoria de dominio:"
+        domain_rule = "Devuelve SOLO resultados del dominio indicado."
     location = ctx.get("location") or ctx.get("province") or "España"
     operation = ctx.get("operation") or "alquiler"
 
@@ -413,14 +420,14 @@ def _openai_prompt(spec: SourceSpec, ctx: dict[str, Any], max_results: int) -> s
     return f"""
 Busca anuncios inmobiliarios reales y actuales exclusivamente en {spec.slug}.
 
-Restricción obligatoria de dominio:
+{domain_header}
 {domains}
 
 Consulta:
 {location_instruction} Filtros: {filter_text}.
 
 Reglas:
-- Devuelve SOLO resultados del dominio indicado.
+- {domain_rule}
 - No inventes URLs.
 - Prioriza fichas individuales reales de inmueble frente a listados.\n- {source_rules}
 - No devuelvas páginas de búsqueda genéricas si puedes devolver fichas individuales.
