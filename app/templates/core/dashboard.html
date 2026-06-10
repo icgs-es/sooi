@@ -4,9 +4,90 @@
 {% block section_title %}Panel{% endblock %}
 
 {% block content %}
+  {% if trial_info %}
+    {% if trial_info.active %}
+    <div style="background:#8DC63F;color:#1B2A3B;padding:10px 20px;
+                border-radius:8px;margin-bottom:20px;font-weight:600;">
+      ⏱ Tu prueba Professional termina en {{ trial_info.days_left }} días ·
+      <a href="mailto:hola@sooi.io" style="color:#1B2A3B;">Contáctanos para continuar</a>
+    </div>
+    {% elif trial_info.expired %}
+    <div style="background:#ff4444;color:white;padding:10px 20px;
+                border-radius:8px;margin-bottom:20px;font-weight:600;">
+      ⚠️ Tu prueba ha finalizado.
+      <a href="{% url 'trial_expirado' %}" style="color:white;">Ver opciones para continuar</a>
+    </div>
+    {% endif %}
+  {% endif %}
   <div class="page-card">
     <h1>Panel operativo</h1>
     <p>Resumen de valor: captación, ruido detectado, oportunidades y seguimiento activo.</p>
+
+    <div class="sooi-dashboard-roadmap-card" style="
+      margin-top:18px;
+      padding:16px;
+      border:1px solid #dbe3ee;
+      border-left:4px solid #84cc16;
+      border-radius:16px;
+      background:linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    ">
+      <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+        <div style="max-width:640px;">
+          <div style="
+            display:inline-flex;
+            align-items:center;
+            padding:4px 9px;
+            border-radius:999px;
+            background:#ecfccb;
+            color:#365314;
+            font-weight:800;
+            font-size:12px;
+            margin-bottom:8px;
+          ">
+            SOOI V2
+          </div>
+
+          <h2 style="font-size:20px; margin:0 0 6px;">Producto operativo comercializable</h2>
+
+          <p style="margin:0; color:#475569;">
+            SOOI V2 permite trabajar con búsquedas como expedientes, captación por email,
+            bandeja de revisión, oportunidades, tareas, agenda, alertas e IA controlada.
+          </p>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <a class="btn" href="/app/busquedas/">Ver búsquedas</a>
+          <a class="btn" href="/app/inbox/">Inbox Email</a>
+        </div>
+      </div>
+
+      <div style="
+        display:grid;
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:12px;
+        margin-top:14px;
+      ">
+        <div style="padding:14px; border:1px solid #dbe3ee; border-radius:14px; background:#ffffff;">
+          <strong>SOOI V2.1 · Próximas mejoras operativas</strong>
+          <ul style="margin:10px 0 0 18px; color:#475569; line-height:1.55;">
+            <li>Revisión automática de enlaces de oportunidades.</li>
+            <li>Actividades automáticas de disponibilidad.</li>
+            <li>Alertas de oportunidades posiblemente retiradas.</li>
+            <li>Mayor trazabilidad de automatizaciones.</li>
+          </ul>
+        </div>
+
+        <div style="padding:14px; border:1px solid #dbe3ee; border-radius:14px; background:#ffffff;">
+          <strong>SOOI V3 · Evolución prevista</strong>
+          <ul style="margin:10px 0 0 18px; color:#475569; line-height:1.55;">
+            <li>Captación Agente IA v0.</li>
+            <li>Estudio de integraciones con APIs oficiales de portales.</li>
+            <li>Automatización avanzada de búsquedas.</li>
+            <li>Reporting y analítica para equipos.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="quick-grid" style="margin-top: 18px;">
@@ -51,7 +132,7 @@
     <a class="btn btn-primary" href="/app/busquedas/nuevo/">Nueva búsqueda</a>
     <a class="btn" href="/app/captacion/">Abrir captación</a>
     <a class="btn" href="/app/oportunidades/">Ver oportunidades</a>
-    <a class="btn" href="/app/configuracion/">Configuración</a>
+    {# SOOI_STAFF_ONLY_LINK_START #}{% if user.is_staff or user.is_superuser %}<a class="btn" href="/app/configuracion/">Configuración</a>{% endif %}{# SOOI_STAFF_ONLY_LINK_END #}
   </div>
 
   <div class="page-card" style="margin-top: 18px;">

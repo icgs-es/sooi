@@ -12,6 +12,7 @@ from .views import (
     registro_view,
     system_settings_edit,
     terms_of_use,
+    trial_expirado,
 )
 
 urlpatterns = [
@@ -22,6 +23,7 @@ urlpatterns = [
     path("privacidad/", privacy_policy, name="privacy_policy"),
     path("terminos/", terms_of_use, name="terms_of_use"),
     path("app/", dashboard, name="dashboard"),
+    path("app/trial-expirado/", trial_expirado, name="trial_expirado"),
     path("app/configuracion/", internal_admin_required(system_settings_edit), name="system_settings"),
     path("app/ia/", include("apps.ia.urls")),
     path("app/busquedas/", include("apps.busquedas.urls")),
