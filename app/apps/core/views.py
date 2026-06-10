@@ -5,7 +5,8 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render, get_object_or_404
@@ -106,6 +107,18 @@ def dashboard(request):
         .order_by("-created_at")[:5]
     )
 
+    try:
+        profile = request.user.profile
+        if profile.is_trial and not profile.trial_expired:
+            days_left = (profile.trial_end - timezone.now()).days
+            trial_info = {'active': True, 'days_left': days_left}
+        elif profile.trial_expired:
+            trial_info = {'active': False, 'expired': True}
+        else:
+            trial_info = None
+    except Exception:
+        trial_info = None
+
     return render(
         request,
         "core/dashboard.html",
@@ -115,6 +128,7 @@ def dashboard(request):
             "recent_opportunities": recent_opportunities,
             "recent_tasks": recent_tasks,
             "recent_alerts": recent_alerts,
+            "trial_info": trial_info,
         },
     )
 
@@ -252,11 +266,34 @@ def registro_view(request):
                 user.groups.add(group)
 
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+
+            try:
+                _ctx = {
+                    'nombre': user.first_name or user.email,
+                    'trial_end': user.profile.trial_end.strftime('%d de %B de %Y'),
+                    'dashboard_url': 'https://sooi.io/app/',
+                }
+                _msg = EmailMultiAlternatives(
+                    subject='Ya tienes acceso a SOOI',
+                    body=render_to_string('core/emails/bienvenida.txt', _ctx),
+                    from_email='SOOI <no-reply@sooi.io>',
+                    to=[user.email],
+                )
+                _msg.attach_alternative(render_to_string('core/emails/bienvenida.html', _ctx), 'text/html')
+                _msg.send(fail_silently=True)
+            except Exception:
+                pass
+
             return redirect("dashboard")
     else:
         form = RegistrationForm()
 
     return render(request, "core/registro.html", {"form": form})
+
+
+@login_required
+def trial_expirado(request):
+    return render(request, "core/trial_expirado.html")
 
 
 def demo_request(request):

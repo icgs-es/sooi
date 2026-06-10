@@ -1,0 +1,10 @@
+Hola {{ nombre }},
+
+Ya tienes acceso a SOOI. Tu prueba Professional de 14 días ha comenzado.
+
+Accede a tu dashboard:
+https://sooi.io/app/
+
+Tienes hasta el {{ trial_end }} para explorar todas las funciones.
+
+El equipo SOOI
