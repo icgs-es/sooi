@@ -8,6 +8,7 @@ from .views import (
     internal_user_create,
     internal_user_edit,
     internal_user_list,
+    logout_view,
     privacy_policy,
     registro_view,
     system_settings_edit,
@@ -16,6 +17,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("accounts/logout/", logout_view, name="logout"),
     path("app/inbox/", include("apps.inbox.urls")),
     path("", home, name="home"),
     path("registro/", registro_view, name="registro"),

@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login
+from django.contrib.auth import get_user_model, login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -294,6 +294,11 @@ def registro_view(request):
 @login_required
 def trial_expirado(request):
     return render(request, "core/trial_expirado.html")
+
+
+def logout_view(request):
+    auth_logout(request)
+    return redirect('home')
 
 
 def demo_request(request):
