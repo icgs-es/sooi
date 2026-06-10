@@ -1,16 +1,23 @@
-from django.core.mail import send_mail
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render, get_object_or_404
-from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.mail import send_mail
+from django.db import transaction
 from django.http import HttpResponseForbidden
+from django.shortcuts import redirect, render, get_object_or_404
+from django.utils import timezone
+
 from apps.busquedas.models import SearchProfile
+from apps.core.access import is_internal_admin
 from apps.inmuebles.models import CapturedProperty
 from apps.seguimiento.models import Alert, FollowUpTask, PropertyOpportunity
 
-from .forms import DemoRequestForm, SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm
-from .models import SystemSettings
+from .forms import DemoRequestForm, RegistrationForm, SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm
+from .models import SystemSettings, UserProfile
 
 
 def home(request):
@@ -114,6 +121,13 @@ def dashboard(request):
 
 @login_required
 def system_settings_edit(request):
+    if not is_internal_admin(request.user):
+        messages.warning(
+            request,
+            "La configuración interna de SOOI está reservada a administración."
+        )
+        return redirect("/app/")
+
     settings_obj = SystemSettings.get_solo()
 
     if request.method == "POST":
@@ -205,6 +219,45 @@ def internal_user_edit(request, pk):
             "item": item,
         },
     )
+
+def registro_view(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        form = RegistrationForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                data = form.cleaned_data
+
+                user = User.objects.create_user(
+                    username=data["email"].lower(),
+                    email=data["email"].lower(),
+                    password=data["password1"],
+                    first_name=data["first_name"],
+                    last_name=data["last_name"],
+                )
+
+                now = timezone.now()
+                UserProfile.objects.create(
+                    user=user,
+                    company=data.get("company", ""),
+                    trial_start=now,
+                    trial_end=now + timedelta(days=14),
+                    is_trial=True,
+                    signup_source="self_service",
+                )
+
+                group, _ = Group.objects.get_or_create(name="sooi_plan_professional")
+                user.groups.add(group)
+
+            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+            return redirect("dashboard")
+    else:
+        form = RegistrationForm()
+
+    return render(request, "core/registro.html", {"form": form})
+
 
 def demo_request(request):
     sent = False

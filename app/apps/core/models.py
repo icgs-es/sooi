@@ -1,6 +1,10 @@
+from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 
 from apps.ia.models import AIProviderConfig
+
+User = get_user_model()
 
 
 class SystemSettings(models.Model):
@@ -112,3 +116,32 @@ class DemoRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} · {self.email}"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    company = models.CharField("empresa", max_length=200, blank=True)
+    phone = models.CharField("teléfono", max_length=50, blank=True)
+    trial_start = models.DateTimeField("inicio de trial", null=True, blank=True)
+    trial_end = models.DateTimeField("fin de trial", null=True, blank=True)
+    is_trial = models.BooleanField("en periodo de trial", default=True)
+    signup_source = models.CharField(
+        "origen de registro",
+        max_length=50,
+        default="self_service",
+    )
+
+    class Meta:
+        verbose_name = "Perfil de usuario"
+        verbose_name_plural = "Perfiles de usuario"
+
+    def __str__(self):
+        return self.user.email
+
+    @property
+    def trial_expired(self):
+        return bool(self.trial_end and self.trial_end < timezone.now())

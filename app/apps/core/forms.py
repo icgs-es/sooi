@@ -101,3 +101,48 @@ class DemoRequestForm(forms.ModelForm):
                 "placeholder": "Cuéntanos brevemente qué tipo de oportunidades inmobiliarias quieres gestionar con SOOI.",
             }),
         }
+
+
+class RegistrationForm(forms.Form):
+    first_name = forms.CharField(
+        label="Nombre",
+        max_length=150,
+        widget=forms.TextInput(attrs={"placeholder": "Nombre"}),
+    )
+    last_name = forms.CharField(
+        label="Apellidos",
+        max_length=150,
+        widget=forms.TextInput(attrs={"placeholder": "Apellidos"}),
+    )
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={"placeholder": "tu@email.com"}),
+    )
+    company = forms.CharField(
+        label="Empresa (opcional)",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={"placeholder": "Tu empresa o proyecto"}),
+    )
+    password1 = forms.CharField(
+        label="Contraseña",
+        widget=forms.PasswordInput(attrs={"placeholder": "Mínimo 8 caracteres"}),
+    )
+    password2 = forms.CharField(
+        label="Confirmar contraseña",
+        widget=forms.PasswordInput(attrs={"placeholder": "Repite la contraseña"}),
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].lower().strip()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("Ya existe una cuenta con este email.")
+        return email
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = cleaned.get("password1")
+        p2 = cleaned.get("password2")
+        if p1 and p2 and p1 != p2:
+            self.add_error("password2", "Las contraseñas no coinciden.")
+        return cleaned
