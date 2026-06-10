@@ -1158,13 +1158,16 @@ def _ai_strict_discard_reason_v261(source_row: dict[str, Any], item: dict[str, A
 
     # Idealista bloquea probes HTTP con 403 por anti-bot — no indica que el inmueble
     # no exista. Mismo tratamiento que services.py:600: ignorar el 403 de idealista.
-    is_idealista_403 = "idealista" in source and error is not None and "403" in str(error)
+    is_idealista_403 = "idealista" in source and (
+        (error is not None and "403" in str(error))
+        or (status is not None and str(status) == "403")
+    )
 
     if error and not is_idealista_403:
         return f"ai_probe_error:{error}"
 
     try:
-        if status is not None and int(status) >= 400:
+        if status is not None and int(status) >= 400 and not is_idealista_403:
             return f"ai_probe_http_{status}"
     except Exception:
         pass
