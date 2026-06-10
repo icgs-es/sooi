@@ -4,6 +4,7 @@ import json
 import os
 import re
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -1525,7 +1526,11 @@ def run_hybrid_discovery_v261(
         row["candidate_count"] = len(raw_candidates)
 
         if raw_candidates:
-            verdicts = [_classify_candidate(spec, item, ctx=ctx, timeout=timeout) for item in raw_candidates]
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                verdicts = list(pool.map(
+                    lambda item: _classify_candidate(spec, item, ctx=ctx, timeout=timeout),
+                    raw_candidates,
+                ))
             row["candidates"] = verdicts
             row["verified"] = sum(1 for v in verdicts if v["classification"] == "verified")
             row["reviewable"] = sum(1 for v in verdicts if v["classification"] == "reviewable")
