@@ -113,3 +113,22 @@ class CapturedPropertyManualForm(forms.ModelForm):
             obj.save()
 
         return obj
+
+
+class CapturedPropertyAvailabilityVerificationForm(forms.ModelForm):
+    class Meta:
+        model = CapturedProperty
+        fields = [
+            "availability_verification_state",
+            "availability_verification_note",
+        ]
+        labels = {
+            "availability_verification_state": "Disponibilidad",
+            "availability_verification_note": "Nota de verificación",
+        }
+        widgets = {
+            "availability_verification_state": forms.Select(),
+            "availability_verification_note": forms.Textarea(
+                attrs={"rows": 3, "placeholder": "Nota opcional"}
+            ),
+        }

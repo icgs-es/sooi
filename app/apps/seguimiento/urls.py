@@ -1,3 +1,4 @@
+from . import views as seguimiento_views
 from django.urls import path
 
 from .views import (
@@ -25,6 +26,7 @@ from .views import (
 urlpatterns = [
     path("agenda/", agenda_view, name="agenda_view"),
     path("oportunidades/", opportunity_list, name="opportunity_list"),
+    path("oportunidades/accion-masiva/descartar/", seguimiento_views.opportunity_bulk_discard, name="opportunity_bulk_discard"),
     path("oportunidades/<int:pk>/", opportunity_detail, name="opportunity_detail"),
     path("oportunidades/<int:pk>/editar/", opportunity_edit, name="opportunity_edit"),
     path("oportunidades/<int:pk>/actividad/", opportunity_add_activity, name="opportunity_add_activity"),

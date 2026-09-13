@@ -49,6 +49,8 @@ sooi.ordixcore.com {
   }
 
   handle {
-    reverse_proxy sooi_web:8000
+    reverse_proxy sooi_web:8000 {
+        header_up X-Forwarded-Proto https
+    }
   }
 }

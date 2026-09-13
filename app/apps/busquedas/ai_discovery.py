@@ -38,15 +38,86 @@ class AIDiscoveryResult:
 
 
 def _clean_json_block(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+    import json
+    import re
 
+    value = (text or "").strip()
+    if not value:
+        return value
+
+    # Caso típico Qwen/Gemini:
+    # texto explicativo + bloque ```json ... ```
+    fenced = re.search(
+        r"```(?:json)?\s*([\s\S]*?)\s*```",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if fenced:
+        candidate = fenced.group(1).strip()
+        try:
+            json.loads(candidate)
+            return candidate
+        except Exception:
+            value = candidate
+
+    # Si ya es JSON puro, devolverlo.
+    try:
+        json.loads(value)
+        return value
+    except Exception:
+        pass
+
+    def extract_balanced_json(s: str, start_pos: int) -> str:
+        opener = s[start_pos]
+        closer = "}" if opener == "{" else "]"
+        stack = []
+        in_string = False
+        escape = False
+
+        for idx in range(start_pos, len(s)):
+            ch = s[idx]
+
+            if escape:
+                escape = False
+                continue
+
+            if ch == "\\" and in_string:
+                escape = True
+                continue
+
+            if ch == '"':
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if ch == opener:
+                stack.append(ch)
+            elif ch == closer:
+                if stack:
+                    stack.pop()
+                if not stack:
+                    return s[start_pos:idx + 1].strip()
+
+        return s[start_pos:].strip()
+
+    # Extraer el primer objeto JSON real aunque venga precedido por texto.
+    object_pos = value.find("{")
+    array_pos = value.find("[")
+
+    positions = [p for p in [object_pos, array_pos] if p != -1]
+    if not positions:
+        return value
+
+    first_pos = min(positions)
+    candidate = extract_balanced_json(value, first_pos)
+
+    try:
+        json.loads(candidate)
+        return candidate
+    except Exception:
+        return value
 
 def _to_decimal(value: Any) -> Decimal | None:
     if value in (None, "", "null"):
@@ -173,6 +244,167 @@ def _format_target_sources_for_prompt(sources: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+
+
+# SOOI V2.1 MULTI_PROVIDER_WEB_SEARCH_HELPERS
+def _is_gemini_provider(provider_spec: dict[str, Any]) -> bool:
+    provider_code = (provider_spec.get("provider_code") or "").lower()
+    name = (provider_spec.get("name") or "").lower()
+    model_name = (provider_spec.get("model_name") or "").lower()
+    return (
+        provider_code == "gemini"
+        or "gemini" in name
+        or model_name.startswith("gemini-")
+    )
+
+
+def _extract_gemini_text(payload: dict[str, Any]) -> str:
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return ""
+
+    parts = (
+        candidates[0]
+        .get("content", {})
+        .get("parts", [])
+        or []
+    )
+
+    texts = []
+    for part in parts:
+        value = part.get("text")
+        if value:
+            texts.append(value)
+
+    return "\n".join(texts).strip()
+
+
+def _call_gemini_web_search(provider_spec: dict[str, Any], prompt: str) -> str:
+    import json
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import quote
+    from urllib.request import Request, urlopen
+
+    api_key = provider_spec.get("api_key") or ""
+    model_name = provider_spec.get("model_name") or "gemini-2.5-flash"
+
+    if not api_key:
+        raise RuntimeError("Gemini missing_api_key")
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{quote(model_name, safe='')}:generateContent"
+    )
+
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "tools": [
+            {
+                "google_search": {}
+            }
+        ],
+    }
+
+    data = json.dumps(body).encode("utf-8")
+
+    request = Request(
+        url,
+        data=data,
+        headers={
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=120) as response:
+            raw = response.read().decode("utf-8", errors="ignore")
+    except HTTPError as exc:
+        try:
+            raw_error = exc.read().decode("utf-8", errors="ignore")
+        except Exception:
+            raw_error = ""
+        raise RuntimeError(f"Gemini HTTP {exc.code}: {raw_error[:1500]}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Gemini network error: {exc}") from exc
+
+    payload = json.loads(raw)
+    output_text = _extract_gemini_text(payload)
+
+    if not output_text:
+        raise RuntimeError(f"Gemini empty output: {raw[:1500]}")
+
+    return output_text
+
+
+def _call_qwen_web_search(provider_spec: dict[str, Any], prompt: str) -> str:
+    from openai import OpenAI
+
+    api_key = provider_spec.get("api_key") or ""
+    model_name = provider_spec.get("model_name") or "qwen3.5-plus"
+    base_url = (
+        provider_spec.get("base_url")
+        or "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    )
+
+    if not api_key:
+        raise RuntimeError("Qwen missing_api_key")
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+    )
+
+    # Qwen puede activar thinking mode según modelo. Con Web Search,
+    # Alibaba puede rechazar llamadas no streaming. Usamos streaming
+    # para soportar ambos casos y recogemos solo el contenido final.
+    stream = client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        stream=True,
+        extra_body={
+            "enable_search": True,
+            "enable_thinking": False,
+            "search_options": {
+                "search_strategy": "agent",
+            },
+        },
+    )
+
+    chunks: list[str] = []
+
+    for event in stream:
+        choices = getattr(event, "choices", None) or []
+        if not choices:
+            continue
+
+        delta = getattr(choices[0], "delta", None)
+        if delta is None:
+            continue
+
+        content = getattr(delta, "content", None)
+        if content:
+            chunks.append(content)
+
+    output_text = "".join(chunks).strip()
+
+    if not output_text:
+        raise RuntimeError("Qwen empty streaming output")
+
+    return output_text
+
 class AIDiscoveryClient:
     provider_name = "ai"
 
@@ -205,6 +437,8 @@ class AIDiscoveryClient:
     def _build_client(self, provider_spec: dict[str, Any]) -> OpenAI:
         kwargs: dict[str, Any] = {
             "api_key": provider_spec["api_key"],
+            "timeout": 45.0,
+            "max_retries": 0,
         }
         if provider_spec["base_url"]:
             kwargs["base_url"] = provider_spec["base_url"]
@@ -360,6 +594,8 @@ Instrucciones sobre fuentes:
 - Prioriza fuentes verificadas, pero puedes usar fuentes pendientes si el resultado es claro.
 - Para terrenos, solares o parcelas, intenta buscar también en Terrenos.es.
 - Para activos bancarios o servicers, intenta buscar también en Servihabitat, Solvia y Altamira.
+- En Solvia, una ficha individual válida suele tener estructura tipo /es/propiedades/comprar/...-12345-67890; no uses listados como /es/comprar/viviendas/....
+- En Altamira, una ficha individual válida suele tener estructura tipo /venta-de-piso/.../segunda-mano/12345678/123456/1; no uses páginas genéricas ni listados.
 - Para vivienda general, intenta buscar también en Habitaclia y yaencontre.
 - Puedes usar otras fuentes públicas si aportan ficha individual real, pero deben ser trazables.
 
@@ -381,18 +617,23 @@ Subbúsqueda actual:
 - Objetivo táctico: {variant_focus}
 
 Reglas obligatorias:
-- Devuelve SOLO anuncios reales con URL real y accesible de la ficha del inmueble.
+- Devuelve SOLO anuncios reales con URL de ficha individual del inmueble.
 - No inventes URLs, portales, precios, ubicaciones ni características.
 - No devuelvas páginas genéricas de búsqueda, listados, home del portal o enlaces ambiguos.
-- Si no estás seguro, excluye el resultado.
-- Si se ha indicado zona o municipio, prioriza esa zona.
+- Si la URL EXACTA pertenece a un portal confiable y tiene estructura clara de ficha individual, inclúyela aunque el portal pueda no ser verificable técnicamente desde servidor; deja constancia en raw_evidence.notes.
+- No construyas, deduzcas ni completes URLs a partir de patrones, referencias, slugs, códigos de inmueble o listados. Si no tienes una URL exacta de ficha individual, excluye el resultado.
+- Excluye solo resultados claramente ambiguos, listados, URLs sin forma de ficha, anuncios retirados, URLs inferidas o datos incompatibles con los filtros.
+- Si se ha indicado zona o municipio, prioriza esa zona, pero puedes incluir oportunidades de la provincia si son claras y relevantes.
+- municipality es obligatorio como campo: devuelve el municipio/localidad explícito del candidato, o una cadena vacía si la fuente no lo aporta.
+- Nunca uses la provincia, la consulta, el hostname o la ruta de la URL como municipality.
+- Conserva la ubicación textual original de la fuente en raw_evidence.location; barrios y distritos no son municipios sin evidencia municipal explícita.
 - Si la operación es alquiler, no mezcles venta.
 - Si la operación es venta, no mezcles alquiler.
 - Respeta el precio mínimo si está definido.
 - Respeta el precio máximo si está definido.
 - Respeta los metros mínimos si están definidos.
-- Máximo 5 resultados para esta subbúsqueda.
-- Prioriza calidad y trazabilidad por encima de cantidad.
+- Máximo 8 resultados para esta subbúsqueda.
+- Prioriza ficha individual real y diversidad de fuentes; no reduzcas la cantidad por exceso de prudencia si la URL y los datos son coherentes.
 
 Devuelve SOLO JSON válido con esta estructura exacta:
 {{
@@ -474,23 +715,31 @@ Devuelve SOLO JSON válido con esta estructura exacta:
                 "unsupported",
             )
 
-        if provider_code != "openai":
-            return (
-                prompt,
-                {"provider": provider_name, "error": "web_search_not_implemented"},
-                [f"[{provider_name}] Proveedor configurado, pero la integración de búsqueda web aún no está implementada en SOOI."],
-                [],
-                "unsupported",
-            )
-
         try:
-            client = self._build_client(provider_spec)
-            response = client.responses.create(
-                model=provider_spec["model_name"],
-                tools=[{"type": "web_search"}],
-                input=prompt,
-            )
-            output_text = _clean_json_block(response.output_text)
+            if provider_code == "openai":
+                client = self._build_client(provider_spec)
+                response = client.responses.create(
+                    model=provider_spec["model_name"],
+                    tools=[{"type": "web_search"}],
+                    input=prompt,
+                )
+                output_text = _clean_json_block(getattr(response, "output_text", "") or "")
+            elif _is_gemini_provider(provider_spec):
+                output_text = _clean_json_block(
+                    _call_gemini_web_search(provider_spec, prompt)
+                )
+            elif provider_code == "qwen":
+                output_text = _clean_json_block(
+                    _call_qwen_web_search(provider_spec, prompt)
+                )
+            else:
+                return (
+                    prompt,
+                    {"provider": provider_name, "error": "web_search_not_implemented"},
+                    [f"[{provider_name}] Proveedor configurado, pero la integración de búsqueda web aún no está implementada en SOOI."],
+                    [],
+                    "unsupported",
+                )
         except Exception as e:
             error_kind = _classify_provider_error(e)
             raw_error = _stringify_error(e)
@@ -584,6 +833,16 @@ Devuelve SOLO JSON válido con esta estructura exacta:
         ai_prompt: str = "",
     ) -> AIDiscoveryResult:
         provider_specs = self._get_provider_specs()
+        provider_specs = sorted(
+            provider_specs,
+            key=lambda p: (
+                10 if (p.get("provider_code") or "").lower() == "openai" else
+                20 if (p.get("provider_code") or "").lower() == "qwen" else
+                90 if _is_gemini_provider(p) else
+                50,
+                p.get("priority_order") or 999,
+            ),
+        )
         target_sources = _get_active_target_sources()
         target_sources_text = _format_target_sources_for_prompt(target_sources)
 
@@ -637,6 +896,24 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             variant_completed = False
 
             for idx, provider_spec in enumerate(provider_specs):
+                if _is_gemini_provider(provider_spec) and variant_completed:
+                    print(
+                        "SOOI_AI_ORCHESTRATION_SKIP_GEMINI "
+                        f"variant={variant.get('label')} reason=primary_or_qwen_has_items",
+                        flush=True,
+                    )
+                    continue
+
+                print(
+                    "SOOI_AI_ATTEMPT "
+                    f"variant={variant.get('label')} "
+                    f"provider={provider_spec.get('name')} "
+                    f"code={provider_spec.get('provider_code')} "
+                    f"model={provider_spec.get('model_name')} "
+                    f"priority={provider_spec.get('priority_order')}",
+                    flush=True,
+                )
+
                 prompt, raw_response, warnings, items, status = self._discover_once(
                     provider_spec=provider_spec,
                     operation_type=operation_type,
@@ -651,6 +928,18 @@ Devuelve SOLO JSON válido con esta estructura exacta:
                     variant_label=variant["label"],
                     variant_focus=variant["focus"],
                     target_sources_text=target_sources_text,
+                )
+
+                print(
+                    "SOOI_AI_RESULT "
+                    f"variant={variant.get('label')} "
+                    f"provider={provider_spec.get('name')} "
+                    f"code={provider_spec.get('provider_code')} "
+                    f"model={provider_spec.get('model_name')} "
+                    f"status={status} "
+                    f"items={len(items)} "
+                    f"warnings={len(warnings)}",
+                    flush=True,
                 )
 
                 all_prompts.append(prompt)
@@ -672,15 +961,30 @@ Devuelve SOLO JSON válido con esta estructura exacta:
                     successful_provider_codes.append(provider_spec["provider_code"])
                     successful_model_names.append(provider_spec["model_name"])
 
+                    added_items = 0
                     for item in items:
                         key = _canonical_url(item.source_url)
                         if not key or key in seen_urls:
                             continue
                         seen_urls.add(key)
                         deduped_items.append(item)
+                        added_items += 1
 
-                    variant_completed = True
-                    break
+                    if added_items:
+                        variant_completed = True
+
+                    if provider_spec["provider_code"] == "openai":
+                        print(
+                            "SOOI_AI_ORCHESTRATION_CONTINUE_AFTER_OPENAI "
+                            f"variant={variant.get('label')} next_provider=qwen",
+                            flush=True,
+                        )
+                        continue
+
+                    if variant_completed:
+                        break
+
+                    continue
 
                 is_last_provider = idx == len(provider_specs) - 1
 
@@ -716,5 +1020,5 @@ Devuelve SOLO JSON válido con esta estructura exacta:
             filters_snapshot=filters_snapshot,
             raw_response={"searches": raw_searches},
             warnings=_unique_list(all_warnings),
-            items=deduped_items[:12],
+            items=deduped_items[:25],
         )

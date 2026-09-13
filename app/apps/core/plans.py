@@ -1,6 +1,8 @@
-from django.conf import settings
+from dataclasses import dataclass
+from types import MappingProxyType
 
-from .models import UserProfile
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
 
 SOOI_PLANS = {
     "starter": {
@@ -23,6 +25,8 @@ SOOI_PLANS = {
     },
 }
 
+PLAN_CHOICES = tuple((code, values["name"]) for code, values in SOOI_PLANS.items())
+
 PLAN_GROUPS = {
     "sooi_plan_starter": "starter",
     "sooi_plan_professional": "professional",
@@ -30,39 +34,72 @@ PLAN_GROUPS = {
 }
 
 
+@dataclass(frozen=True)
+class Entitlement:
+    trial_active: bool
+    trial_expired: bool
+    plan_code: str
+    capabilities: frozenset[str]
+    limits: MappingProxyType
+    unlimited_active_searches: bool = False
+    unlimited_ai_credits: bool = False
+
+    @property
+    def plan(self):
+        return SOOI_PLANS[self.plan_code]
+
+
+def resolve_entitlement(user, *, now=None):
+    """Resolve the complete server-side commercial contract, fail-closed."""
+    if not user or not getattr(user, "is_authenticated", False):
+        code = "starter"
+        profile = None
+    else:
+        try:
+            profile = user.profile
+        except (AttributeError, ObjectDoesNotExist):
+            profile = None
+
+        if getattr(user, "is_superuser", False):
+            code = "business"
+        elif profile is None:
+            code = "starter"
+        elif profile.is_trial:
+            current = now or timezone.now()
+            active = bool(profile.trial_start and profile.trial_end and profile.trial_start <= current < profile.trial_end)
+            code = "professional" if active else "starter"
+        else:
+            code = profile.plan if profile.plan in SOOI_PLANS else "starter"
+
+    trial_active = bool(profile and profile.is_trial and code == "professional")
+    trial_expired = bool(profile and profile.is_trial and not trial_active)
+    plan = SOOI_PLANS[code]
+    limits = MappingProxyType({
+        "max_active_searches": int(plan["max_active_searches"]),
+        "monthly_ai_credits": int(plan["monthly_ai_credits"]),
+    })
+    capabilities = frozenset({"searches", "ai_discovery"})
+    return Entitlement(
+        trial_active=trial_active,
+        trial_expired=trial_expired,
+        plan_code=code,
+        capabilities=capabilities,
+        limits=limits,
+        unlimited_active_searches=bool(getattr(user, "is_superuser", False)),
+        unlimited_ai_credits=bool(
+            getattr(user, "is_superuser", False) or getattr(user, "is_staff", False)
+        ),
+    )
+
+
 def get_user_plan_code(user):
-    if not user or not user.is_authenticated:
-        return "starter"
-
-    # Permite configurar excepciones desde settings si más adelante hace falta.
-    overrides = getattr(settings, "SOOI_USER_PLAN_OVERRIDES", {})
-    username = getattr(user, "username", "")
-    email = getattr(user, "email", "")
-
-    if username in overrides:
-        return overrides[username]
-    if email in overrides:
-        return overrides[email]
-
-    # Plan por grupos Django. Sin migraciones y configurable desde admin.
-    for group_name, plan_code in PLAN_GROUPS.items():
-        if user.groups.filter(name=group_name).exists():
-            return plan_code
-
-    return getattr(settings, "SOOI_DEFAULT_PLAN_CODE", "professional")
+    return resolve_entitlement(user).plan_code
 
 
 def get_user_plan(user):
-    # Trial expirado → degradar a starter sin importar el grupo
-    try:
-        if user.profile.is_trial and user.profile.trial_expired:
-            return SOOI_PLANS["starter"]
-    except (AttributeError, UserProfile.DoesNotExist):
-        pass
-
-    code = get_user_plan_code(user)
-    return SOOI_PLANS.get(code, SOOI_PLANS["professional"])
+    return resolve_entitlement(user).plan
 
 
 def get_max_active_searches(user):
-    return int(get_user_plan(user)["max_active_searches"])
+    entitlement = resolve_entitlement(user)
+    return 999999 if entitlement.unlimited_active_searches else entitlement.limits["max_active_searches"]

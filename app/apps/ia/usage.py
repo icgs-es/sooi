@@ -1,6 +1,6 @@
 from django.utils import timezone
 
-from apps.core.plans import get_user_plan
+from apps.core.plans import resolve_entitlement
 
 
 AI_DISCOVERY_CREDITS = 10
@@ -12,7 +12,7 @@ def get_current_month_start():
 
 
 def get_monthly_ai_credit_limit(user):
-    return int(get_user_plan(user).get("monthly_ai_credits", 0))
+    return resolve_entitlement(user).limits["monthly_ai_credits"]
 
 
 def get_monthly_ai_credits_used(user, exclude_run_id=None):
@@ -31,13 +31,20 @@ def get_monthly_ai_credits_used(user, exclude_run_id=None):
 
 
 def get_ai_usage_summary(user, exclude_run_id=None):
-    plan = get_user_plan(user)
+    from apps.busquedas.commercial_metering import (
+        commercial_metering_enabled, get_commercial_usage_summary,
+    )
+    if commercial_metering_enabled():
+        return get_commercial_usage_summary(user)
+
+    entitlement = resolve_entitlement(user)
+    plan = entitlement.plan
     used = get_monthly_ai_credits_used(user, exclude_run_id=exclude_run_id)
 
     # Uso interno ICGS / administración:
     # no bloquea exploraciones durante desarrollo, pruebas o demos guiadas.
     # Los usuarios demo/clientes normales siguen sujetos a su plan comercial.
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+    if entitlement.unlimited_ai_credits:
         internal_limit = 999999
         return {
             "plan_code": "internal",

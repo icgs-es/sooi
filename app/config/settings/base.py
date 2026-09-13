@@ -4,9 +4,8 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env = environ.Env()
-environ.Env.read_env(BASE_DIR.parent / "infra" / "env" / "dev.env")
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="change-me")
+SECRET_KEY = env("DJANGO_SECRET_KEY", default="development-only-not-for-production")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
@@ -36,6 +35,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.core.observability.CorrelationIdMiddleware",
     "axes.middleware.AxesMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -98,6 +98,7 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = env.float("EMAIL_TIMEOUT", default=10.0)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "no-reply@sooi.local")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
@@ -107,11 +108,20 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-STATIC_ROOT = "/vol/static"
+STATIC_ROOT = env.path("STATIC_ROOT", default=BASE_DIR / "staticfiles")
 MEDIA_URL = "/media/"
-MEDIA_ROOT = "/vol/media"
+MEDIA_ROOT = env.path("MEDIA_ROOT", default=BASE_DIR / "media")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Authentication and the reversible WP-08 dashboard experience.
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/app/"
+SOOI_WP08_ENABLED = env.bool("SOOI_WP08_ENABLED", default=False)
+SOOI_WP09_AGGREGATION_ENABLED = env.bool(
+    "SOOI_WP09_AGGREGATION_ENABLED",
+    default=False,
+)
 
 CELERY_BROKER_URL = env("REDIS_URL", default="redis://redis:6379/0")
 CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://redis:6379/0")
@@ -119,6 +129,23 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+# Mounted secret directory. Empty is deliberate: IMAP authentication fails
+# closed until an operator configures an absolute directory explicitly.
+SOOI_IMAP_SECRET_DIR = env("SOOI_IMAP_SECRET_DIR", default="")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "sooi.operations": {
+            "handlers": ["console"],
+            "level": env("SOOI_OBSERVABILITY_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        }
+    },
+}
 
 STORAGES = {
     "default": {
@@ -172,4 +199,3 @@ if SENTRY_DSN:
         traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
         send_default_pii=False,
     )
-

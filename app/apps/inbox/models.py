@@ -14,7 +14,7 @@ class EmailAccount(models.Model):
     imap_port = models.PositiveIntegerField("puerto IMAP", default=993)
     imap_use_ssl = models.BooleanField("usar SSL", default=True)
     imap_username = models.CharField("usuario IMAP", max_length=180, blank=True)
-    imap_password = models.CharField("contraseña IMAP", max_length=255, blank=True)
+    imap_secret_ref = models.CharField("referencia de secreto IMAP", max_length=120)
 
     is_active = models.BooleanField("activo", default=True)
     last_sync_at = models.DateTimeField("última sincronización", null=True, blank=True)

@@ -5,20 +5,26 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
-from django.core.mail import send_mail, EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
-from django.db import transaction
+from django.db import models, transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render, get_object_or_404
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 
 from apps.busquedas.models import SearchProfile
 from apps.core.access import is_internal_admin
 from apps.inmuebles.models import CapturedProperty
 from apps.seguimiento.models import Alert, FollowUpTask, PropertyOpportunity
+from apps.core.observability import emit
+from apps.core.daily_workflow import build_daily_workflow
 
-from .forms import DemoRequestForm, RegistrationForm, SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm
-from .models import SystemSettings, UserProfile
+from .forms import DemoRequestForm, RegistrationForm, SystemSettingsForm, InternalUserCreateForm, InternalUserUpdateForm, NotificationPreferenceForm
+from .models import NotificationPreference, SystemSettings, UserProfile
+from .notifications import retry_demo_notification
+from .plans import resolve_entitlement
+from .proactive_workflow import render_daily_digest
 
 
 def home(request):
@@ -35,100 +41,135 @@ def terms_of_use(request):
 
 @login_required
 def dashboard(request):
-    captured_total = CapturedProperty.objects.filter(owner=request.user).count()
-    opportunities_total = PropertyOpportunity.objects.filter(owner=request.user).count()
+    daily_workflow = build_daily_workflow(request.user)
 
-    opportunities_active_qs = PropertyOpportunity.objects.filter(
-        owner=request.user,
-        status__in=["new", "active", "analysis", "negotiation"],
-    )
-
-    stats = {
-        "search_profiles": SearchProfile.objects.filter(owner=request.user).count(),
-        "search_profiles_active": SearchProfile.objects.filter(
-            owner=request.user,
-            status__in=["active", "paused"],
-        ).count(),
-
-        "captured_properties": captured_total,
-        "captured_pending": CapturedProperty.objects.filter(
-            owner=request.user,
-            status="captured",
-        ).count(),
-        "captured_review_queue": CapturedProperty.objects.filter(
-            owner=request.user,
-            review_status="pending",
-        ).exclude(status="discarded").count(),
-        "captured_interesting": CapturedProperty.objects.filter(
-            owner=request.user,
-            is_interesting=True,
-        ).count(),
-        "captured_duplicates": CapturedProperty.objects.filter(
-            owner=request.user,
-            possible_duplicate=True,
-        ).exclude(status="discarded").count(),
-
-        "opportunities": opportunities_total,
-        "opportunities_active": opportunities_active_qs.count(),
-        "opportunities_high": opportunities_active_qs.filter(priority="high").count(),
-        "capture_to_opportunity_ratio": round((opportunities_total / captured_total) * 100) if captured_total else 0,
-
-        "tasks_open": FollowUpTask.objects.filter(
-            owner=request.user,
-            status__in=["open", "in_progress"],
-        ).count(),
-        "alerts_new": Alert.objects.filter(
-            owner=request.user,
-            status="new",
-        ).count(),
-    }
-
-    recent_captured = (
-        CapturedProperty.objects.select_related("source")
-        .filter(owner=request.user)
-        .order_by("-captured_at")[:5]
-    )
-
-    recent_opportunities = (
-        PropertyOpportunity.objects.select_related("captured_property")
-        .filter(owner=request.user)
-        .order_by("-created_at")[:5]
-    )
-
-    recent_tasks = (
-        FollowUpTask.objects.select_related("property_opportunity", "captured_property")
-        .filter(owner=request.user)
-        .order_by("-created_at")[:5]
-    )
-
-    recent_alerts = (
-        Alert.objects.select_related("property_opportunity", "captured_property")
-        .filter(owner=request.user)
-        .order_by("-created_at")[:5]
-    )
-
-    try:
-        profile = request.user.profile
-        if profile.is_trial and not profile.trial_expired:
-            days_left = (profile.trial_end - timezone.now()).days
-            trial_info = {'active': True, 'days_left': days_left}
-        elif profile.trial_expired:
-            trial_info = {'active': False, 'expired': True}
-        else:
-            trial_info = None
-    except Exception:
+    entitlement = resolve_entitlement(request.user)
+    if entitlement.trial_active:
+        days_left = max((request.user.profile.trial_end - timezone.now()).days, 0)
+        trial_info = {'active': True, 'days_left': days_left}
+    elif entitlement.trial_expired:
+        trial_info = {'active': False, 'expired': True}
+    else:
         trial_info = None
+
+    wp08 = None
+    if settings.SOOI_WP08_ENABLED:
+        first_search = SearchProfile.objects.filter(owner=request.user).order_by("created_at", "pk").first()
+        first_capture = (
+            CapturedProperty.objects.filter(
+                owner=request.user,
+            )
+            .filter(
+                models.Q(search_profile__isnull=True)
+                | models.Q(search_profile__owner=request.user)
+            )
+            .order_by("captured_at", "pk")
+            .first()
+        )
+        first_opportunity = (
+            PropertyOpportunity.objects.filter(
+                owner=request.user,
+                captured_property__owner=request.user,
+            )
+            .order_by("created_at", "pk")
+            .first()
+        )
+
+        active_statuses = [FollowUpTask.Status.OPEN, FollowUpTask.Status.IN_PROGRESS]
+        next_task = (
+            FollowUpTask.objects.select_related("property_opportunity", "captured_property")
+            .filter(owner=request.user, status__in=active_statuses, due_date__isnull=False)
+            .filter(
+                models.Q(property_opportunity__isnull=True)
+                | models.Q(property_opportunity__owner=request.user)
+            )
+            .filter(
+                models.Q(captured_property__isnull=True)
+                | models.Q(captured_property__owner=request.user)
+            )
+            .order_by("due_date", "pk")
+            .first()
+        )
+        next_review = (
+            PropertyOpportunity.objects.select_related("captured_property")
+            .filter(
+                owner=request.user,
+                captured_property__owner=request.user,
+                status__in=["new", "active", "analysis", "negotiation"],
+                next_review_at__isnull=False,
+            )
+            .order_by("next_review_at", "pk")
+            .first()
+        )
+
+        # Automatic review tasks mirror an opportunity review. Prefer the task
+        # as the single actionable item when both records represent that review.
+        if (
+            next_task
+            and next_review
+            and next_task.property_opportunity_id == next_review.pk
+            and next_task.task_type == FollowUpTask.TaskType.REVIEW
+        ):
+            next_review = None
+
+        if next_task and (not next_review or next_task.due_date <= next_review.next_review_at):
+            next_action = {
+                "label": next_task.title,
+                "date": next_task.due_date,
+                "url": f"/app/tareas/{next_task.pk}/",
+            }
+        elif next_review:
+            next_action = {
+                "label": f"Revisar {next_review.title}",
+                "date": next_review.next_review_at,
+                "url": f"/app/oportunidades/{next_review.pk}/",
+            }
+        else:
+            next_action = None
+
+        milestones = [
+            {"label": "Registro completado", "complete": True},
+            {"label": "Primera búsqueda", "complete": first_search is not None},
+            {"label": "Primera captación disponible", "complete": first_capture is not None},
+            {"label": "Primera oportunidad", "complete": first_opportunity is not None},
+            {"label": "Próxima acción fechada", "complete": next_action is not None},
+        ]
+
+        if first_search is None:
+            primary_cta = {"label": "Crear primera búsqueda", "url": "/app/busquedas/nuevo/"}
+        elif first_capture is None:
+            primary_cta = {
+                "label": "Abrir recorrido de captación",
+                "url": f"/app/busquedas/{first_search.pk}/",
+            }
+        elif first_opportunity is None:
+            primary_cta = {
+                "label": "Revisar captación",
+                "url": f"/app/captacion/{first_capture.pk}/",
+            }
+        elif next_action is None:
+            primary_cta = {
+                "label": "Registrar próxima acción",
+                "url": f"/app/oportunidades/{first_opportunity.pk}/editar/",
+            }
+        else:
+            primary_cta = {"label": "Abrir próxima acción pendiente", "url": next_action["url"]}
+
+        wp08 = {
+            "milestones": milestones,
+            "next_milestone": next((item for item in milestones if not item["complete"]), None),
+            "primary_cta": primary_cta,
+            "next_action": next_action,
+            "plan_name": entitlement.plan["name"],
+        }
 
     return render(
         request,
         "core/dashboard.html",
         {
-            "stats": stats,
-            "recent_captured": recent_captured,
-            "recent_opportunities": recent_opportunities,
-            "recent_tasks": recent_tasks,
-            "recent_alerts": recent_alerts,
+            "daily_workflow": daily_workflow,
             "trial_info": trial_info,
+            "wp08": wp08,
         },
     )
 
@@ -162,6 +203,47 @@ def system_settings_edit(request):
             "section_title": "Configuración",
         },
     )
+
+
+@login_required
+def notification_preferences(request):
+    preference = NotificationPreference.objects.filter(owner=request.user).first()
+
+    if request.method == "POST":
+        form = NotificationPreferenceForm(
+            request.POST,
+            instance=preference,
+            user=request.user,
+        )
+        if form.is_valid():
+            saved = form.save(commit=False)
+            saved.owner = request.user
+            saved.save()
+            messages.success(request, "Preferencias de notificación actualizadas.")
+            return redirect("notification_preferences")
+    else:
+        form = NotificationPreferenceForm(
+            instance=preference,
+            initial=None if preference else {
+                "daily_digest_enabled": False,
+                "daily_digest_time": "08:00",
+            },
+            user=request.user,
+        )
+
+    return render(
+        request,
+        "core/notification_settings_form.html",
+        {"form": form, "preference": preference},
+    )
+
+
+@login_required
+@require_GET
+def daily_digest_preview(request):
+    base_url = request.build_absolute_uri("/").rstrip("/")
+    preview = render_daily_digest(request.user, limit=5, base_url=base_url)
+    return render(request, "core/daily_digest_preview.html", {"preview": preview})
     
 User = get_user_model()
 
@@ -280,8 +362,15 @@ def registro_view(request):
                     to=[user.email],
                 )
                 _msg.attach_alternative(render_to_string('core/emails/bienvenida.html', _ctx), 'text/html')
-                _msg.send(fail_silently=True)
+                delivered = _msg.send(fail_silently=True)
+                emit("smtp_delivery", "success" if delivered else "failure",
+                     getattr(request, "correlation_id", None), component="smtp",
+                     operation="welcome", owner_id=user.pk,
+                     reason_code="accepted" if delivered else "not_accepted")
             except Exception:
+                emit("smtp_delivery", "failure", getattr(request, "correlation_id", None),
+                     component="smtp", operation="welcome", owner_id=user.pk,
+                     reason_code="provider_error")
                 pass
 
             return redirect("dashboard")
@@ -311,24 +400,7 @@ def demo_request(request):
             obj.source_domain = request.get_host()
             obj.save()
 
-            try:
-                send_mail(
-                    subject=f"Nueva solicitud de demo SOOI · {obj.name}",
-                    message=(
-                        f"Nombre: {obj.name}\n"
-                        f"Email: {obj.email}\n"
-                        f"Teléfono: {obj.phone or '-'}\n"
-                        f"Perfil: {obj.get_profile_type_display()}\n"
-                        f"Dominio: {obj.source_domain}\n\n"
-                        f"Mensaje:\n{obj.message or '-'}\n"
-                    ),
-                    from_email=None,
-                    recipient_list=["info@sooi.io"],
-                    fail_silently=False,
-                )
-            except Exception:
-                # La solicitud queda guardada aunque falle el aviso por email.
-                pass
+            retry_demo_notification(obj.pk, correlation_id=getattr(request, "correlation_id", None))
 
             sent = True
             form = DemoRequestForm()

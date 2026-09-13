@@ -44,8 +44,24 @@
         </div>
 
         <div>
-          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.zone.label }}</label>
-          {{ form.zone }}
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.geography_scope.label }}</label>
+          {{ form.geography_scope }}
+        </div>
+
+        <div id="municipality-picker" style="grid-column:1 / -1;">
+          <label style="display:block; font-weight:600; margin-bottom:6px;">Municipios</label>
+          {{ form.municipalities }}
+          <div style="display:flex; gap:8px;">
+            <input id="municipality-entry" type="text" placeholder="Escribe un municipio y pulsa Añadir" autocomplete="off">
+            <button class="btn" id="municipality-add" type="button">Añadir</button>
+          </div>
+          <div id="municipality-chips" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
+          <p style="margin:8px 0 0; color:#64748b; font-size:14px;">Cada municipio queda seleccionado y visible por separado.</p>
+        </div>
+
+        <div id="geographic-area-picker" style="grid-column:1 / -1;">
+          <label style="display:block; font-weight:600; margin-bottom:6px;">{{ form.geographic_area.label }}</label>
+          {{ form.geographic_area }}
         </div>
 
         <div>
@@ -70,6 +86,23 @@
       </div>
 
       <div style="margin-top:18px;">
+
+      <div id="search-quality-advice" class="sooi-search-quality sooi-search-quality--basic">
+        <div class="sooi-search-quality__head">
+          <span class="sooi-search-quality__eyebrow">Consejo práctico</span>
+          <strong id="search-quality-title">Calidad de definición de búsqueda: Básica</strong>
+        </div>
+        <p id="search-quality-message">
+          Una búsqueda amplia sirve para explorar mercado, pero puede generar resultados más variados y requerir más revisión manual.
+          Añade tipo de inmueble, rango de precio o zona para mejorar la precisión.
+        </p>
+        <ul class="sooi-search-quality__tips">
+          <li>Mejor mínimo: operación + provincia + tipo de inmueble.</li>
+          <li>Ideal: tipo de inmueble + zona/municipio + rango de precio.</li>
+          <li>Demasiados filtros pueden reducir mucho los resultados.</li>
+        </ul>
+      </div>
+
         <label style="display:block; font-weight:600; margin-bottom:8px;">{{ form.property_types.label }}</label>
         {{ form.property_types }}
       </div>
@@ -131,5 +164,200 @@
       align-items: center;
       gap: 8px;
     }
-  </style>
+
+    .municipality-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:#e0f2fe; color:#075985; }
+    .municipality-chip button { border:0; background:transparent; color:inherit; cursor:pointer; font-size:18px; line-height:1; }
+
+    .sooi-search-quality {
+      border: 1px solid rgba(15, 23, 42, 0.10);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin: 18px 0 20px;
+      background: #f8fafc;
+      color: #334155;
+    }
+
+    .sooi-search-quality__head {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .sooi-search-quality__eyebrow {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      color: #64748b;
+    }
+
+    .sooi-search-quality strong {
+      color: #0f172a;
+      font-size: 0.98rem;
+    }
+
+    .sooi-search-quality p {
+      margin: 0;
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .sooi-search-quality__tips {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      font-size: 0.86rem;
+      color: #475569;
+    }
+
+    .sooi-search-quality--basic {
+      background: #fff7ed;
+      border-color: rgba(234, 88, 12, 0.20);
+    }
+
+    .sooi-search-quality--good {
+      background: #eff6ff;
+      border-color: rgba(37, 99, 235, 0.18);
+    }
+
+    .sooi-search-quality--very-good {
+      background: #ecfdf5;
+      border-color: rgba(5, 150, 105, 0.20);
+    }
+
+    .sooi-search-quality--restrictive {
+      background: #fef2f2;
+      border-color: rgba(220, 38, 38, 0.18);
+    }
+
+</style>
+
+<script>
+(function () {
+  function hasValue(id) {
+    var el = document.getElementById(id);
+    return !!(el && String(el.value || "").trim());
+  }
+
+  function hasPropertyType() {
+    var field = document.getElementById("id_property_types");
+    if (!field) return false;
+
+    if (field.tagName === "SELECT") {
+      return Array.from(field.selectedOptions || []).some(function (opt) {
+        return !!String(opt.value || "").trim();
+      });
+    }
+
+    return !!document.querySelector("#id_property_types input[type=checkbox]:checked");
+  }
+
+  function updateSearchQualityAdvice() {
+    var box = document.getElementById("search-quality-advice");
+    var title = document.getElementById("search-quality-title");
+    var message = document.getElementById("search-quality-message");
+
+    if (!box || !title || !message) return;
+
+    var hasZone = hasValue("id_geography_scope");
+    var hasMinPrice = hasValue("id_min_price");
+    var hasMaxPrice = hasValue("id_max_price");
+    var hasBedrooms = hasValue("id_min_bedrooms");
+    var hasType = hasPropertyType();
+
+    var score = 0;
+    if (hasType) score += 1;
+    if (hasZone) score += 1;
+    if (hasMinPrice || hasMaxPrice) score += 1;
+    if (hasBedrooms) score += 1;
+
+    box.classList.remove(
+      "sooi-search-quality--basic",
+      "sooi-search-quality--good",
+      "sooi-search-quality--very-good",
+      "sooi-search-quality--restrictive"
+    );
+
+    if (score >= 4) {
+      box.classList.add("sooi-search-quality--restrictive");
+      title.textContent = "Calidad de definición de búsqueda: Muy precisa";
+      message.textContent = "La búsqueda está muy definida. La captación será más precisa, aunque puede devolver menos resultados si el mercado disponible es pequeño.";
+    } else if (score >= 3) {
+      box.classList.add("sooi-search-quality--very-good");
+      title.textContent = "Calidad de definición de búsqueda: Muy buena";
+      message.textContent = "SOOI tiene criterios suficientes para orientar bien la captación IA y reducir revisión manual.";
+    } else if (score >= 1) {
+      box.classList.add("sooi-search-quality--good");
+      title.textContent = "Calidad de definición de búsqueda: Buena";
+      message.textContent = "La búsqueda tiene algunos criterios útiles. Añadir zona, tipo de inmueble o rango de precio puede mejorar todavía más la precisión.";
+    } else {
+      box.classList.add("sooi-search-quality--basic");
+      title.textContent = "Calidad de definición de búsqueda: Básica";
+      message.textContent = "Una búsqueda amplia sirve para explorar mercado, pero puede generar resultados más variados y requerir más revisión manual. Añade tipo de inmueble, rango de precio o zona para mejorar la precisión.";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    updateSearchQualityAdvice();
+
+    [
+      "id_geography_scope",
+      "id_min_price",
+      "id_max_price",
+      "id_min_bedrooms",
+      "id_property_types"
+    ].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("input", updateSearchQualityAdvice);
+        el.addEventListener("change", updateSearchQualityAdvice);
+      }
+    });
+
+    document.querySelectorAll("#id_property_types input[type=checkbox]").forEach(function (el) {
+      el.addEventListener("change", updateSearchQualityAdvice);
+    });
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var hidden = document.getElementById("id_municipalities");
+    var entry = document.getElementById("municipality-entry");
+    var chips = document.getElementById("municipality-chips");
+    var add = document.getElementById("municipality-add");
+    var scope = document.getElementById("id_geography_scope");
+    var municipalityPicker = document.getElementById("municipality-picker");
+    var areaPicker = document.getElementById("geographic-area-picker");
+    if (!hidden || !entry || !chips || !add || !scope) return;
+
+    function values() { return String(hidden.value || "").split(",").map(function(v){ return v.trim(); }).filter(Boolean); }
+    function render() {
+      chips.innerHTML = "";
+      values().forEach(function(value, index) {
+        var chip = document.createElement("span");
+        chip.className = "municipality-chip";
+        chip.appendChild(document.createTextNode(value));
+        var remove = document.createElement("button");
+        remove.type = "button"; remove.setAttribute("aria-label", "Quitar " + value); remove.textContent = "×";
+        remove.addEventListener("click", function(){ var next = values(); next.splice(index, 1); hidden.value = next.join(","); render(); });
+        chip.appendChild(remove); chips.appendChild(chip);
+      });
+    }
+    function addValue() {
+      var value = entry.value.trim(); if (!value || value.indexOf(",") !== -1) return;
+      var current = values();
+      if (!current.some(function(v){ return v.toLocaleLowerCase() === value.toLocaleLowerCase(); })) current.push(value);
+      hidden.value = current.join(","); entry.value = ""; render();
+    }
+    function toggleScope() {
+      var municipal = scope.value === "municipality" || scope.value === "multi_municipality";
+      municipalityPicker.style.display = municipal ? "block" : "none";
+      areaPicker.style.display = scope.value === "named_area" ? "block" : "none";
+    }
+    add.addEventListener("click", addValue);
+    entry.addEventListener("keydown", function(event){ if (event.key === "Enter") { event.preventDefault(); addValue(); } });
+    scope.addEventListener("change", toggleScope);
+    render(); toggleScope();
+  });
+})();
+</script>
 {% endblock %}

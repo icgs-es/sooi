@@ -1,0 +1,65 @@
+{% extends "core/base_private.html" %}
+{% block title %}Detalle de ejecución | SOOI{% endblock %}
+{% block section_title %}Detalle de ejecución{% endblock %}
+{% block content %}
+<div class="page-card">
+  <h1>{{ run.search_profile.name }} · {{ mode.label }}</h1>
+  {% if run.governance_enabled %}
+    <p>{{ mode.description }}</p>
+    <p><strong>Estado:</strong> {{ customer_status.label }}</p>
+    {% if run.status == "completed_with_errors" %}<p><strong>Incidencias:</strong> ejecución completada con incidencias; la cobertura o validación fue parcial.</p>{% endif %}
+    <p><strong>{{ result_summary }}</strong></p>
+    <dl>
+      <dt>Máximo autorizado</dt><dd>{{ run.budget_max_credits }} créditos máximos autorizados de búsqueda</dd>
+      <dt>Consumo real</dt><dd>{{ run.budget_consumed_credits|default_if_none:"0" }} Créditos de Búsqueda</dd>
+      <dt>Uso técnico de la ejecución</dt><dd>{{ run.budget_consumed_credits|default:"0" }} unidades</dd>
+      <dt>Cobertura</dt><dd>{{ coverage_text }}</dd>
+      <dt>Motivo de parada</dt><dd>{{ stop_reason_text }}</dd>
+      {% if coverage_contract.sources_freshly_executed is not None and coverage_contract.sources_effectively_covered is not None and coverage_contract.sources_omitted is not None %}
+      <dt>Fuentes</dt><dd>{{ run.sources_planned }} planificadas · {{ coverage_contract.sources_freshly_executed }} ejecutadas ahora · {{ coverage_contract.sources_reused }} reutilizadas · {{ coverage_contract.sources_omitted }} no cubiertas</dd>
+      {% else %}
+      <dt>Fuentes</dt><dd>{{ run.sources_planned }} planificadas · {{ run.sources_executed }} ejecutadas · {{ run.sources_omitted }} omitidas</dd>
+      {% endif %}
+      <dt>Expansiones</dt><dd>{{ run.calls_succeeded }} completadas · {{ run.calls_attempted }} intentadas · {{ run.calls_planned }} planificadas</dd>
+      {% if coverage_contract %}
+      <dt>Cobertura ejecutada</dt><dd>{{ coverage_contract.executed_units }} de {{ coverage_contract.planned_units }} ubicaciones ({{ coverage_contract.coverage_percent_executed }}%)</dd>
+      {% if coverage_contract.geographic_locations_planned %}<dt>Cobertura geográfica</dt><dd>{{ coverage_contract.geographic_locations_executed }} de {{ coverage_contract.geographic_locations_planned }} ubicaciones ({{ coverage_contract.geographic_coverage_percent }}%)</dd>{% endif %}
+      {% if coverage_contract.sources_planned and coverage_contract.sources_effectively_covered is not None %}<dt>Cobertura de fuentes</dt><dd>{{ coverage_contract.sources_effectively_covered }} de {{ coverage_contract.sources_planned }} fuentes ({{ coverage_contract.source_coverage_percent }}%); {{ coverage_contract.sources_omitted }} no cubiertas</dd>{% endif %}
+      {% if coverage_contract.external_calls_planned %}<dt>Expansión externa</dt><dd>{{ coverage_contract.external_calls_executed }} de {{ coverage_contract.external_calls_planned }} llamadas ({{ coverage_contract.external_call_coverage_percent }}%)</dd>{% endif %}
+      <dt>Ubicaciones restantes</dt><dd>{{ coverage_contract.remaining_units }}</dd>
+      <dt>Alcance del resultado</dt><dd>{{ coverage_contract.result_scope }} · {{ result_scope_display }}</dd>
+      {% if quality_semantics %}
+      <dt>Calidad de candidatos</dt><dd>{{ quality_semantics.raw_candidates }} candidatos · {{ quality_semantics.actionable_count }} confirmados · {{ quality_semantics.review_required_count }} para revisar · {{ quality_semantics.unavailable_count }} no disponibles · {{ quality_semantics.commercial_yield_pct }}% de conversión a oportunidad confirmada</dd>
+      {% endif %}
+      {% endif %}
+      <dt>Reutilización</dt><dd>{% if run.cache_hits %}Sí ({{ run.cache_hits }} coincidencias){% else %}No{% endif %}</dd>
+      {% if run.reused_from_search_run_id %}<dt>Procedencia reutilizada</dt><dd>Ejecución #{{ run.reused_from_search_run_id }}</dd>{% endif %}
+      {% if coverage_contract.reuse_observability %}<dt>Gobernanza live</dt><dd>{% if coverage_contract.reuse_observability.provider_request_governance_live_exercised %}Ejercitada en esta ejecución{% else %}No ejercitada por reutilización{% endif %}</dd>{% endif %}
+    </dl>
+    <p>{{ market_disclaimer }} El máximo autorizado puede no consumirse por completo.</p>
+    {% if geography_snapshot %}<section style="margin-top:16px;"><h2 style="font-size:18px;">Geografía utilizada</h2>
+      {% for unit in geography_snapshot.intent_resolutions %}<p>{{ unit.raw_location }}{% if unit.resolution_status == "ALIAS_RESOLVED" %} → {{ unit.canonical_name }} · Alias reconocido{% elif unit.resolution_status == "EXACT" %} · Ubicación verificada{% elif unit.resolution_status == "UNRESOLVED" %} · Ubicación sin normalizar. Se utilizó el término introducido.{% else %} · Ubicación no verificada{% endif %}</p>{% endfor %}
+    </section>{% endif %}
+    {% if can_expand and search_governance_enabled %}
+    <section style="margin-top:20px; padding:16px; border:1px solid #dbe3ee; border-radius:12px;">
+      <h2>Ampliar búsqueda a {{ target_preview.label }}</h2>
+      <p>{{ target_preview.description }}</p>
+      <p>Máximo técnico: {{ target_preview.maximum_external_calls }} expansiones externas. Esta pantalla no ejecuta fuentes ni consume autorización.</p>
+      {% if target_preview.permitted %}
+      <form method="post" action="{% url 'searchrun_expand' run.id %}">
+        {% csrf_token %}
+        <input type="hidden" name="search_mode" value="{{ target_preview.mode }}">
+        <label>Nuevo límite máximo autorizado
+          <input type="number" name="budget_max_credits" value="{{ target_preview.default_authorization }}" min="0" max="{{ target_preview.maximum_authorization }}" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Autorizar nueva búsqueda más amplia</button>
+      </form>
+      {% else %}<p>{{ target_preview.denied_reason }}</p>{% endif %}
+    </section>
+    {% endif %}
+  {% else %}
+    <p>Esta ejecución histórica no utilizó el contrato de cobertura gobernada.</p>
+  {% endif %}
+  <p><a class="btn" href="{% url 'searchprofile_detail' run.search_profile_id %}">Volver a la búsqueda</a></p>
+</div>
+{% endblock %}

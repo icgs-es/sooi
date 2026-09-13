@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/sooi/release_manifest.schema.json",
+  "title": "SOOI release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_commit",
+    "source_tree_id",
+    "source_archive_sha256",
+    "base_image",
+    "base_image_id",
+    "candidate_image_id",
+    "candidate_tag",
+    "dockerfile_sha256",
+    "dockerignore_sha256",
+    "source_date_epoch"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "source_commit": {"type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"},
+    "source_tree_id": {"type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"},
+    "source_archive_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "base_image": {"type": "string", "minLength": 1},
+    "base_image_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "candidate_image_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "candidate_tag": {"type": "string", "minLength": 1},
+    "dockerfile_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "dockerignore_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_date_epoch": {"type": "integer", "minimum": 0}
+  }
+}

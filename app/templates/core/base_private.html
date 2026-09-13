@@ -435,7 +435,35 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="{% static 'core/sooi_modern.css' %}?v=20260510-15">
+  <link rel="stylesheet" href="{% static 'core/sooi_modern.css' %}?v=20260822-sr021c-operational-ux">
+
+<style>
+  .sooi-private-clean-brand {
+    padding: 20px 18px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    margin-bottom: 14px;
+  }
+  .sooi-private-clean-brand__main {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    line-height: .95;
+  }
+  .sooi-private-clean-brand__main .s {
+    color: #f8fafc;
+  }
+  .sooi-private-clean-brand__main .green {
+    color: #b7e915;
+  }
+  .sooi-private-clean-brand__sub {
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #b7e915;
+    letter-spacing: .02em;
+  }
+</style>
+
 </head>
 <body class="{% if '/app/busquedas/' in request.path or '/app/captacion/' in request.path or '/app/inbox/' in request.path %}module-capture{% elif '/app/oportunidades/' in request.path %}module-opportunity{% elif '/app/agenda/' in request.path or '/app/tareas/' in request.path or '/app/alertas/' in request.path %}module-tracking{% elif '/app/comercializadoras/' in request.path or '/app/contactos-oportunidad/' in request.path %}module-relations{% elif '/app/configuracion/' in request.path %}module-system{% else %}module-home{% endif %}">
   <div class="app">
@@ -482,26 +510,26 @@
         </a>
       {% endif %}
 
-      <nav class="nav nav-grouped">
-        <a class="nav-link nav-link--home {% if request.path == '/app/' %}is-active{% endif %}" href="/app/">
+      <nav class="nav nav-grouped" aria-label="Navegación principal">
+        <a class="nav-link nav-link--home {% if request.path == '/app/' %}is-active{% endif %}" href="/app/"{% if request.path == '/app/' %} aria-current="page"{% endif %}>
           <span class="nav-link__dot"></span>
-          <span>Panel</span>
+          <span>Hoy</span>
         </a>
 
         <div class="nav-section">
           <div class="nav-section__title">Captación</div>
 
-          <a class="nav-link nav-link--capture {% if '/app/busquedas/' in request.path %}is-active{% endif %}" href="/app/busquedas/">
+          <a class="nav-link nav-link--capture {% if '/app/busquedas/' in request.path %}is-active{% endif %}" href="/app/busquedas/"{% if '/app/busquedas/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Búsquedas</span>
           </a>
 
-          <a class="nav-link nav-link--capture {% if '/app/captacion/' in request.path %}is-active{% endif %}" href="/app/captacion/">
+          <a class="nav-link nav-link--capture {% if '/app/captacion/' in request.path %}is-active{% endif %}" href="/app/captacion/"{% if '/app/captacion/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Bandeja de Captación</span>
           </a>
 
-          <a class="nav-link nav-link--capture {% if '/app/inbox/' in request.path %}is-active{% endif %}" href="/app/inbox/">
+          <a class="nav-link nav-link--capture {% if '/app/inbox/' in request.path %}is-active{% endif %}" href="/app/inbox/"{% if '/app/inbox/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Inbox Email</span>
           </a>
@@ -510,7 +538,7 @@
         <div class="nav-section">
           <div class="nav-section__title">Oportunidades</div>
 
-          <a class="nav-link nav-link--opportunity {% if '/app/oportunidades/' in request.path %}is-active{% endif %}" href="/app/oportunidades/">
+          <a class="nav-link nav-link--opportunity {% if '/app/oportunidades/' in request.path %}is-active{% endif %}" href="/app/oportunidades/"{% if '/app/oportunidades/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Oportunidades</span>
           </a>
@@ -519,17 +547,17 @@
         <div class="nav-section">
           <div class="nav-section__title">Seguimiento</div>
 
-          <a class="nav-link nav-link--tracking {% if '/app/agenda/' in request.path %}is-active{% endif %}" href="/app/agenda/">
+          <a class="nav-link nav-link--tracking {% if '/app/agenda/' in request.path %}is-active{% endif %}" href="/app/agenda/"{% if '/app/agenda/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Agenda</span>
           </a>
 
-          <a class="nav-link nav-link--tracking {% if '/app/tareas/' in request.path %}is-active{% endif %}" href="/app/tareas/">
+          <a class="nav-link nav-link--tracking {% if '/app/tareas/' in request.path %}is-active{% endif %}" href="/app/tareas/"{% if '/app/tareas/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Tareas</span>
           </a>
 
-          <a class="nav-link nav-link--tracking {% if '/app/alertas/' in request.path %}is-active{% endif %}" href="/app/alertas/">
+          <a class="nav-link nav-link--tracking {% if '/app/alertas/' in request.path %}is-active{% endif %}" href="/app/alertas/"{% if '/app/alertas/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Alertas</span>
           </a>
@@ -538,24 +566,29 @@
         <div class="nav-section">
           <div class="nav-section__title">Relaciones</div>
 
-          <a class="nav-link nav-link--relations {% if '/app/comercializadoras/' in request.path %}is-active{% endif %}" href="/app/comercializadoras/">
+          <a class="nav-link nav-link--relations {% if '/app/comercializadoras/' in request.path %}is-active{% endif %}" href="/app/comercializadoras/"{% if '/app/comercializadoras/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Comercializadoras</span>
           </a>
 
-          <a class="nav-link nav-link--relations {% if '/app/contactos-oportunidad/' in request.path %}is-active{% endif %}" href="/app/contactos-oportunidad/">
+          <a class="nav-link nav-link--relations {% if '/app/contactos-oportunidad/' in request.path %}is-active{% endif %}" href="/app/contactos-oportunidad/"{% if '/app/contactos-oportunidad/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Contactos</span>
           </a>
         </div>
 
         <div class="nav-section">
-          <div class="nav-section__title">Sistema</div>
 
-          <a class="nav-link nav-link--system {% if '/app/configuracion/' in request.path %}is-active{% endif %}" href="/app/configuracion/">
+          {# SOOI_SYSTEM_LABEL_STAFF_ONLY_START #}
+          {% if request.user.is_staff or request.user.is_superuser %}
+          <div class="nav-section__title">Sistema</div>
+          {% endif %}
+          {# SOOI_SYSTEM_LABEL_STAFF_ONLY_END #}
+
+          {# SOOI_STAFF_ONLY_LINK_START #}{% if user.is_staff or user.is_superuser %}<a class="nav-link nav-link--system {% if '/app/configuracion/' in request.path %}is-active{% endif %}" href="/app/configuracion/"{% if '/app/configuracion/' in request.path %} aria-current="page"{% endif %}>
             <span class="nav-link__dot"></span>
             <span>Configuración</span>
-          </a>
+          </a>{% endif %}{# SOOI_STAFF_ONLY_LINK_END #}
         </div>
       </nav>
 
@@ -575,6 +608,7 @@
         <strong>{% block section_title %}SOOI{% endblock %}</strong>
         <div class="user" style="display:flex; align-items:center; gap:10px;">
           <span>{{ request.user.username }}</span>
+          <a href="{% url 'notification_preferences' %}" style="color:#475569; text-decoration:none; font-weight:600;">Notificaciones</a>
 
           <form method="post" action="/accounts/logout/" style="margin:0;">
             {% csrf_token %}

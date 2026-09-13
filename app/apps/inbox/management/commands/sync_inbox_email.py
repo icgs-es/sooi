@@ -1,14 +1,19 @@
 import email
 import html as html_lib
 import imaplib
+import json
 import re
 from email.header import decode_header, make_header
-from email.utils import parsedate_to_datetime, parseaddr
+from email.utils import parsedate_to_datetime, parseaddr, getaddresses
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 
 from apps.inbox.models import EmailAccount, InboundEmail
+from apps.busquedas.models import SearchProfile
+from apps.core.observability import emit, new_correlation_id
+from apps.inbox.secrets import ImapSecretError, resolve_imap_secret
 
 
 URL_RE = re.compile(r'''https?://[^\s<>"']+''', re.IGNORECASE)
@@ -145,6 +150,95 @@ def extract_urls(body_text, body_html):
     return urls
 
 
+CAPTURE_ALIAS_RE = re.compile(
+    r"^(?:(?:captaciones\+(?:busqueda-?|b|sp|search-?)?)|(?:busqueda-?|b|sp|search-?))(?P<search_id>\d+)@",
+    re.IGNORECASE,
+)
+
+
+def extract_recipient_addresses(message):
+    header_names = [
+        "To",
+        "Cc",
+        "Delivered-To",
+        "X-Original-To",
+        "Envelope-To",
+        "Apparently-To",
+    ]
+
+    addresses = []
+    raw_headers = {}
+
+    for header_name in header_names:
+        values = message.get_all(header_name, [])
+        decoded_values = [decode_mime(value) for value in values if value]
+
+        if decoded_values:
+            raw_headers[header_name] = decoded_values
+
+        for _, addr in getaddresses(decoded_values):
+            addr = (addr or "").strip().lower()
+            if addr and addr not in addresses:
+                addresses.append(addr)
+
+    return addresses, raw_headers
+
+
+def resolve_search_profile_from_recipients(recipient_addresses):
+    for addr in recipient_addresses or []:
+        match = CAPTURE_ALIAS_RE.match(addr)
+        if not match:
+            continue
+
+        search_id = match.group("search_id")
+
+        try:
+            return SearchProfile.objects.select_related("owner").get(pk=search_id)
+        except SearchProfile.DoesNotExist:
+            return None
+
+    return None
+
+
+def persist_message(*, account, owner, search_profile, uid, message_id, payload,
+                    update_existing=False, dry_run=False):
+    """Serialize per-account upserts so retries cannot create two messages."""
+    if dry_run:
+        exists = InboundEmail.objects.filter(account=account, message_uid=uid).exists()
+        return "skipped" if exists else "dry_run"
+
+    with transaction.atomic():
+        locked_account = EmailAccount.objects.select_for_update().get(pk=account.pk)
+        existing = InboundEmail.objects.filter(
+            account=locked_account, message_uid=uid,
+        ).first()
+        if existing is None and message_id:
+            existing = InboundEmail.objects.filter(
+                account=locked_account, message_id=message_id,
+            ).first()
+
+        if existing:
+            if not update_existing:
+                return "skipped"
+            for field, value in payload.items():
+                setattr(existing, field, value)
+            existing.owner = owner
+            existing.search_profile = search_profile
+            existing.save(update_fields=[
+                "subject", "from_name", "from_email", "received_at", "snippet",
+                "body_text", "detected_urls", "raw_metadata", "owner",
+                "search_profile", "updated_at",
+            ])
+            return "updated"
+
+        InboundEmail.objects.create(
+            owner=owner, account=locked_account, search_profile=search_profile,
+            status=InboundEmail.Status.NEW, message_uid=uid,
+            message_id=message_id, **payload,
+        )
+        return "created"
+
+
 class Command(BaseCommand):
     help = "Sincroniza correos IMAP hacia Inbox Email de SOOI."
 
@@ -161,6 +255,7 @@ class Command(BaseCommand):
         only_unseen = options["only_unseen"]
         update_existing = options["update_existing"]
         dry_run = options["dry_run"]
+        correlation_id = new_correlation_id()
 
         accounts = EmailAccount.objects.filter(is_active=True)
         if account_id:
@@ -168,31 +263,35 @@ class Command(BaseCommand):
 
         if not accounts.exists():
             self.stdout.write(self.style.WARNING("No hay cuentas activas para sincronizar."))
-            return
+            return json.dumps({"status": "failure", "accounts": [], "reason_code": "not_found"})
 
+        results = []
         for account in accounts:
             self.stdout.write("")
-            self.stdout.write(f"== Sincronizando cuenta #{account.id}: {account.email_address} ==")
+            self.stdout.write(f"== Sincronizando cuenta técnica #{account.id} ==")
 
-            if not account.imap_host or not account.imap_username or not account.imap_password:
-                self.stdout.write(self.style.ERROR("Cuenta incompleta: falta host, usuario o contraseña IMAP."))
+            if not account.imap_host or not account.imap_username or not account.imap_secret_ref:
+                self.stdout.write(self.style.ERROR("Cuenta técnica incompleta."))
+                results.append({"account_id": account.pk, "status": "failure", "reason_code": "account_incomplete"})
                 continue
 
             try:
+                imap_secret = resolve_imap_secret(account.imap_secret_ref)
                 if account.imap_use_ssl:
                     client = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
                 else:
                     client = imaplib.IMAP4(account.imap_host, account.imap_port)
 
-                client.login(account.imap_username, account.imap_password)
+                client.login(account.imap_username, imap_secret)
                 client.select("INBOX")
 
                 criteria = "UNSEEN" if only_unseen else "ALL"
                 status, data = client.search(None, criteria)
 
                 if status != "OK":
-                    self.stdout.write(self.style.ERROR(f"No se pudo buscar correos: {status}"))
+                    self.stdout.write(self.style.ERROR("No se pudo buscar correo; consulte observabilidad técnica."))
                     client.logout()
+                    results.append({"account_id": account.pk, "status": "retry", "reason_code": "provider_unavailable"})
                     continue
 
                 ids = data[0].split()
@@ -216,6 +315,19 @@ class Command(BaseCommand):
                     from_name, from_addr = parseaddr(from_header)
                     message_id = (msg.get("Message-ID") or "").strip()
                     uid = msg_num.decode("utf-8", errors="replace")
+                    recipient_addresses, recipient_headers = extract_recipient_addresses(msg)
+                    resolved_search_profile = resolve_search_profile_from_recipients(recipient_addresses)
+                    resolved_owner = resolved_search_profile.owner if resolved_search_profile else account.owner
+
+                    # An account is an ownership boundary. Aliases may only
+                    # resolve profiles owned by the same account owner.
+                    if resolved_owner.pk != account.owner_id:
+                        emit("imap_message", "failure", correlation_id, component="imap",
+                             operation="resolve_owner", object_type="email_account",
+                             object_id=account.pk, owner_id=account.owner_id,
+                             reason_code="cross_owner_alias")
+                        skipped_count += 1
+                        continue
 
                     received_at = timezone.now()
                     date_header = msg.get("Date")
@@ -233,17 +345,6 @@ class Command(BaseCommand):
                     snippet = body_text[:240]
                     detected_urls = extract_urls(body_text, body_html)
 
-                    existing = InboundEmail.objects.filter(
-                        account=account,
-                        message_uid=uid,
-                    ).first()
-
-                    if existing is None and message_id:
-                        existing = InboundEmail.objects.filter(
-                            account=account,
-                            message_id=message_id,
-                        ).first()
-
                     payload = {
                         "subject": subject[:255],
                         "from_name": (from_name or from_header)[:180],
@@ -254,43 +355,25 @@ class Command(BaseCommand):
                         "detected_urls": detected_urls,
                         "raw_metadata": {
                             "from_header": from_header,
+                            "recipient_addresses": recipient_addresses,
+                            "recipient_headers": recipient_headers,
                             "sync_source": "imap",
                         },
                     }
 
-                    if existing:
-                        if update_existing and not dry_run:
-                            for field, value in payload.items():
-                                setattr(existing, field, value)
-
-                            existing.save(update_fields=[
-                                "subject",
-                                "from_name",
-                                "from_email",
-                                "received_at",
-                                "snippet",
-                                "body_text",
-                                "detected_urls",
-                                "raw_metadata",
-                                "updated_at",
-                            ])
-                            updated_count += 1
-                        else:
-                            skipped_count += 1
-                        continue
-
-                    self.stdout.write(f"- Nuevo: {subject or '(Sin asunto)'}")
-
-                    if not dry_run:
-                        InboundEmail.objects.create(
-                            owner=account.owner,
-                            account=account,
-                            status=InboundEmail.Status.NEW,
-                            message_uid=uid,
-                            message_id=message_id,
-                            **payload,
-                        )
+                    outcome = persist_message(
+                        account=account, owner=resolved_owner,
+                        search_profile=resolved_search_profile, uid=uid,
+                        message_id=message_id, payload=payload,
+                        update_existing=update_existing, dry_run=dry_run,
+                    )
+                    if outcome == "created":
+                        self.stdout.write("- Nuevo mensaje detectado")
                         created_count += 1
+                    elif outcome == "updated":
+                        updated_count += 1
+                    else:
+                        skipped_count += 1
 
                 if not dry_run:
                     account.last_sync_at = timezone.now()
@@ -303,8 +386,37 @@ class Command(BaseCommand):
                         f"Cuenta sincronizada. Nuevos: {created_count}. Actualizados: {updated_count}. Omitidos: {skipped_count}."
                     )
                 )
+                emit("inbox_sync", "success", correlation_id, component="imap",
+                     operation="sync", object_type="email_account", object_id=account.pk,
+                     owner_id=account.owner_id, count=created_count + updated_count)
+                results.append({"account_id": account.pk, "status": "success", "count": created_count + updated_count})
 
-            except imaplib.IMAP4.error as exc:
-                self.stdout.write(self.style.ERROR(f"Error IMAP: {exc}"))
-            except Exception as exc:
-                self.stdout.write(self.style.ERROR(f"Error inesperado: {exc}"))
+            except ImapSecretError as exc:
+                self.stdout.write(self.style.ERROR("Secreto IMAP no disponible; sincronización bloqueada."))
+                emit("inbox_sync", "failure", correlation_id, component="imap",
+                     operation="sync", object_type="email_account", object_id=account.pk,
+                     owner_id=account.owner_id, reason_code=exc.code)
+                results.append({"account_id": account.pk, "status": "failure", "reason_code": exc.code})
+            except imaplib.IMAP4.error:
+                self.stdout.write(self.style.ERROR("Error IMAP; consulte observabilidad técnica."))
+                emit("inbox_sync", "retry", correlation_id, component="imap",
+                     operation="sync", object_type="email_account", object_id=account.pk,
+                     owner_id=account.owner_id, reason_code="provider_unavailable")
+                results.append({"account_id": account.pk, "status": "retry", "reason_code": "provider_unavailable"})
+            except Exception:
+                self.stdout.write(self.style.ERROR("Error inesperado; consulte observabilidad técnica."))
+                emit("inbox_sync", "failure", correlation_id, component="imap",
+                     operation="sync", object_type="email_account", object_id=account.pk,
+                     owner_id=account.owner_id, reason_code="unexpected_error")
+                results.append({"account_id": account.pk, "status": "failure", "reason_code": "unexpected_error"})
+
+        states = {item["status"] for item in results}
+        if states == {"success"}:
+            overall = "success"
+        elif "success" in states:
+            overall = "partial"
+        elif "retry" in states and "failure" not in states:
+            overall = "retry"
+        else:
+            overall = "failure"
+        return json.dumps({"status": overall, "accounts": results}, sort_keys=True)

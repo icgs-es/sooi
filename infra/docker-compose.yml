@@ -7,6 +7,12 @@ services:
     restart: unless-stopped
     env_file:
       - ./env/dev.env
+    environment:
+      SOOI_USE_HYBRID_V2614: "0"
+      SOOI_HYBRID_V2614_WRITE: "1"
+      SOOI_HYBRID_V2614_USE_AI: "1"
+      SOOI_HYBRID_V2614_TIMEOUT: "12"
+      SOOI_HYBRID_V2614_MAX_RESULTS: "20"
     volumes:
       - sooi_postgres_data:/var/lib/postgresql/data
     networks:
@@ -28,6 +34,12 @@ services:
     command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 180 --graceful-timeout 30"
     env_file:
       - ./env/dev.env
+    environment:
+      SOOI_USE_HYBRID_V2614: "1"
+      SOOI_HYBRID_V2614_WRITE: "1"
+      SOOI_HYBRID_V2614_USE_AI: "1"
+      SOOI_HYBRID_V2614_TIMEOUT: "12"
+      SOOI_HYBRID_V2614_MAX_RESULTS: "20"
     volumes:
       - ../app:/app
       - sooi_static:/vol/static
@@ -50,6 +62,35 @@ services:
     command: celery -A config worker -l info
     env_file:
       - ./env/dev.env
+    environment:
+      SOOI_USE_HYBRID_V2614: "1"
+      SOOI_HYBRID_V2614_WRITE: "1"
+      SOOI_HYBRID_V2614_USE_AI: "1"
+      SOOI_HYBRID_V2614_TIMEOUT: "12"
+      SOOI_HYBRID_V2614_MAX_RESULTS: "20"
+    volumes:
+      - ../app:/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - sooi_net
+
+  beat:
+    build:
+      context: ../
+      dockerfile: infra/django/Dockerfile
+    container_name: sooi_beat
+    restart: unless-stopped
+    command: celery -A config beat --loglevel=INFO --schedule=/tmp/sooi-celerybeat-schedule --pidfile=/tmp/sooi-celerybeat.pid
+    env_file:
+      - ./env/dev.env
+    environment:
+      SOOI_USE_HYBRID_V2614: "1"
+      SOOI_HYBRID_V2614_WRITE: "1"
+      SOOI_HYBRID_V2614_USE_AI: "1"
+      SOOI_HYBRID_V2614_TIMEOUT: "12"
+      SOOI_HYBRID_V2614_MAX_RESULTS: "20"
     volumes:
       - ../app:/app
     depends_on:

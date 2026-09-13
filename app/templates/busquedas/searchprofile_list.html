@@ -1,9 +1,312 @@
 {% extends "core/base_private.html" %}
+{% load busquedas_format %}
 
-{% block title %}Búsquedas | SOOI{% endblock %}
+{% block title %}Búsquedas | SOOI
+{% endblock %}
 {% block section_title %}Búsquedas{% endblock %}
 
 {% block content %}
+{% if user_plan and ai_usage %}
+<style>
+  .sooi-plan-usage-card {
+    margin: 0 0 1.25rem 0;
+    padding: 1rem;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 18px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  }
+  .sooi-plan-usage-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: .75rem;
+  }
+  .sooi-plan-usage-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .75rem;
+  }
+  .sooi-plan-usage-item {
+    padding: .85rem;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .sooi-plan-usage-label {
+    font-size: .78rem;
+    color: #64748b;
+    margin-bottom: .25rem;
+  }
+  .sooi-plan-usage-value {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  .sooi-plan-usage-note {
+    margin-top: .75rem;
+    font-size: .82rem;
+    color: #64748b;
+  }
+
+  .sooi-demo-banner {
+    margin: 0 0 .85rem 0;
+    padding: .85rem 1rem;
+    border-radius: 14px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: .9rem;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+  }
+  .sooi-demo-banner strong {
+    color: #d9f99d;
+  }
+  .sooi-demo-banner.is-expired {
+    background: #7f1d1d;
+    color: #fee2e2;
+  }
+
+
+  .sooi-capture-email {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    flex-wrap: wrap;
+  }
+  .sooi-capture-email code {
+    padding: .35rem .55rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #dbe3ee;
+    color: #0f172a;
+    font-size: .82rem;
+    white-space: nowrap;
+  }
+  .sooi-copy-email-btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+    border-radius: 999px;
+    padding: .32rem .55rem;
+    font-size: .78rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .sooi-copy-email-btn:hover {
+    background: #f1f5f9;
+  }
+
+
+  .sooi-capture-email-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: .78rem;
+    font-weight: 800;
+    cursor: help;
+  }
+  .sooi-capture-email-help__bubble {
+    display: none;
+    position: absolute;
+    z-index: 50;
+    top: 28px;
+    right: 0;
+    width: 280px;
+    padding: .75rem .85rem;
+    border-radius: 14px;
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, .20);
+    font-size: .78rem;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: left;
+  }
+  .sooi-capture-email-help:hover .sooi-capture-email-help__bubble,
+  .sooi-capture-email-help:focus .sooi-capture-email-help__bubble {
+    display: block;
+  }
+
+
+  .sooi-capture-email-help .sooi-capture-email-help__bubble {
+    display: none !important;
+  }
+
+  .sooi-floating-help-tooltip {
+    display: none;
+    position: fixed;
+    z-index: 99999;
+    width: 310px;
+    max-width: calc(100vw - 24px);
+    padding: .75rem .85rem;
+    border-radius: 14px;
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
+    font-size: .78rem;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: left;
+    pointer-events: none;
+  }
+
+  .sooi-floating-help-tooltip strong {
+    color: #ffffff;
+  }
+
+  @media (max-width: 900px) {
+    .sooi-plan-usage-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .sooi-search-advice-panel {
+    margin: 18px 0;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 18px;
+    padding: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .sooi-search-advice-panel__eyebrow {
+    display: inline-flex;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 800;
+    color: #2563eb;
+  }
+
+  .sooi-search-advice-panel h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #0f172a;
+  }
+
+  .sooi-search-advice-panel p {
+    margin: 6px 0 0;
+    color: #64748b;
+    line-height: 1.45;
+  }
+
+  .sooi-search-advice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .sooi-search-advice-card {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    padding: 14px;
+    background: #ffffff;
+  }
+
+  .sooi-search-advice-card strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #0f172a;
+  }
+
+  .sooi-search-advice-card p {
+    margin: 0;
+    font-size: 0.88rem;
+  }
+
+  .sooi-search-advice-card--recommended {
+    border-color: rgba(37, 99, 235, 0.22);
+    background: #eff6ff;
+  }
+
+  @media (max-width: 900px) {
+    .sooi-search-advice-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+</style>
+
+
+  <section class="sooi-search-advice-panel">
+    <div class="sooi-search-advice-panel__header">
+      <span class="sooi-search-advice-panel__eyebrow">Consejo práctico</span>
+      <h3>Mejora la calidad de tus búsquedas IA</h3>
+      <p>
+        Cuantos más criterios útiles tenga una búsqueda, mejor podrá SOOI orientar la captación.
+        Una búsqueda muy amplia explora más mercado, pero normalmente requiere más revisión manual.
+      </p>
+    </div>
+
+    <div class="sooi-search-advice-grid">
+      <div class="sooi-search-advice-card">
+        <strong>Búsqueda amplia</strong>
+        <p>Provincia + operación. Útil para explorar, pero puede traer resultados muy variados.</p>
+      </div>
+      <div class="sooi-search-advice-card sooi-search-advice-card--recommended">
+        <strong>Recomendado</strong>
+        <p>Añade tipo de inmueble, zona o municipio y rango de precio para mejorar precisión.</p>
+      </div>
+      <div class="sooi-search-advice-card">
+        <strong>Muy precisa</strong>
+        <p>Muchos filtros reducen ruido, aunque pueden devolver menos oportunidades.</p>
+      </div>
+    </div>
+  </section>
+
+<section class="sooi-plan-usage-card">
+  <div class="sooi-plan-usage-title">Uso comercial de la cuenta</div>
+
+  {% if demo_status.is_demo %}
+    <div class="sooi-demo-banner{% if not demo_status.active %} is-expired{% endif %}">
+      {% if demo_status.active %}
+        <strong>Demo guiada activa</strong> · Plan Professional · quedan {{ demo_status.days_remaining }} días de {{ demo_status.days_total }}.
+      {% else %}
+        <strong>Demo finalizada</strong> · Contacta con ICGS para activar un plan comercial.
+      {% endif %}
+    </div>
+  {% endif %}
+
+
+  <div class="sooi-plan-usage-grid">
+    {% if not search_governance_enabled %}<div class="sooi-plan-usage-item">
+      <div class="sooi-plan-usage-label">Plan actual</div>
+      <div class="sooi-plan-usage-value">{{ user_plan.name }}</div>
+    </div>{% endif %}
+
+    <div class="sooi-plan-usage-item">
+      <div class="sooi-plan-usage-label">Búsquedas activas</div>
+      <div class="sooi-plan-usage-value">{{ active_searches_count }} / {{ max_active_searches }}</div>
+    </div>
+
+    <div class="sooi-plan-usage-item">
+      <div class="sooi-plan-usage-label">{% if ai_usage.is_commercial_metering %}Créditos de Búsqueda{% else %}Créditos IA{% endif %}</div>
+      <div class="sooi-plan-usage-value">{{ ai_usage.credits_used }} / {{ ai_usage.monthly_ai_credits }}</div>
+    </div>
+
+    <div class="sooi-plan-usage-item">
+      <div class="sooi-plan-usage-label">Exploraciones IA disponibles</div>
+      <div class="sooi-plan-usage-value">{% if ai_usage.is_commercial_metering %}{{ ai_usage.credits_reserved }} reservados · {{ ai_usage.credits_remaining }} disponibles{% else %}{{ ai_usage.ai_discovery_remaining }}{% endif %}</div>
+    </div>
+  </div>
+
+  {% if search_governance_enabled %}<div class="sooi-plan-usage-note">Cada búsqueda gobernada requiere autorizar un máximo finito. El uso puede variar y nunca supera ese límite; no se crea un segundo saldo.</div>{% else %}<div class="sooi-plan-usage-note">
+    {% if ai_usage.is_commercial_metering %}Periodo {{ ai_usage.period_start }}–{{ ai_usage.period_end }}. Solo se consume el uso real de búsquedas gobernadas; la parte no usada se libera.{% else %}Cada exploración IA consume {{ ai_usage.ai_discovery_cost }} créditos. Las búsquedas archivadas no ocupan plaza activa.{% endif %}
+  </div>{% endif %}
+</section>
+{% endif %}
+
+
   <div class="page-card">
     <h1>Búsquedas / expedientes</h1>
     <p>Cada búsqueda funciona como un expediente operativo: captaciones, oportunidades, ejecuciones y desenlace.</p>
@@ -50,16 +353,17 @@
 
     {% if active_search_profiles %}
       <div style="overflow:auto; margin-top:14px;">
-        <table style="width:100%; border-collapse: collapse;">
+        <table class="sooi-table sooi-search-table" style="width:100%; border-collapse: collapse;">
           <thead>
             <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
               <th style="padding:12px;">Búsqueda</th>
               <th style="padding:12px;">Estado</th>
-              <th style="padding:12px;">Automatización</th>
+              <th style="padding:12px;">Auto.</th>
               <th style="padding:12px;">Provincia</th>
               <th style="padding:12px;">Operación</th>
               <th style="padding:12px;">Tipos</th>
               <th style="padding:12px;">Precio máximo</th>
+              <th style="padding:12px;">Email captación</th>
               <th style="padding:12px;">Acciones</th>
             </tr>
           </thead>
@@ -69,6 +373,12 @@
                 <td style="padding:12px; font-weight:600;">
                   <a href="/app/busquedas/{{ item.id }}/" style="color:inherit; text-decoration:none;">
                     {% include "seguimiento/_search_badge.html" with search_profile=item %}
+                    <div class="sooi-row-meta sooi-row-meta--search">
+                      {% if item.province %}{{ item.province }}{% endif %}
+                      {% if item.get_operation_type_display %} · {{ item.get_operation_type_display }}{% endif %}
+                      {% if item.property_type %} · {{ item.property_type }}{% endif %}
+                      {% if item.max_price %} · hasta {{ item.max_price|euro }}{% endif %}
+                    </div>
                   </a>
                 </td>
                 <td style="padding:12px;">{{ item.get_status_display }}</td>
@@ -76,9 +386,30 @@
                 <td style="padding:12px;">{{ item.province }}</td>
                 <td style="padding:12px;">{{ item.get_operation_type_display }}</td>
                 <td style="padding:12px;">{% if item.property_types %}{{ item.property_types_display }}{% else %}—{% endif %}</td>
-                <td style="padding:12px;">{% if item.max_price %}{{ item.max_price }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.max_price %}{{ item.max_price|euro }}{% else %}—{% endif %}</td>
+                <td style="padding:12px;">
+                  <div class="sooi-capture-email">
+                    <code id="capture-email-{{ item.id }}">busqueda{{ item.id }}@sooi.io</code>
+                    <button
+                      type="button"
+                      class="sooi-copy-email-btn js-copy-capture-email"
+                      data-copy-target="capture-email-{{ item.id }}"
+                    >
+                      Copiar
+                    </button>
+                    <span class="sooi-capture-email-help" tabindex="0" aria-label="Ayuda sobre email de captación">
+                      i
+                      <span class="sooi-capture-email-help__bubble">
+                        Usa este email para compartir anuncios directamente desde portales inmobiliarios.
+                        Los emails enviados aquí se vinculan a esta búsqueda. Después entra en Inbox Email,
+                        pulsa <strong>Actualizar bandeja</strong>, revisa el mensaje y conviértelo en captación.
+                      </span>
+                    </span>
+                  </div>
+                </td>
                 <td style="padding:12px; white-space:nowrap;">
                   <a class="btn" href="/app/busquedas/{{ item.id }}/">Abrir</a>
+                    <a class="btn" href="/app/busquedas/{{ item.id }}/v261/">V2.6.1</a>
 
                   {% if item.status == "active" %}
                     <form class="js-run-search-form" method="post" action="/app/busquedas/{{ item.id }}/ejecutar/" style="display:inline;">
@@ -151,7 +482,7 @@
 
     {% if recent_runs %}
       <div style="overflow:auto; margin-top:14px;">
-        <table style="width:100%; border-collapse: collapse;">
+        <table class="sooi-table sooi-runs-table" style="width:100%; border-collapse: collapse;">
           <thead>
             <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
               <th style="padding:12px;">Fecha</th>
@@ -159,8 +490,8 @@
               <th style="padding:12px;">Estado</th>
               <th style="padding:12px;">Encontrados</th>
               <th style="padding:12px;">Nuevos</th>
-              <th style="padding:12px;">Actualizados</th>
-              <th style="padding:12px;">Descartes</th>
+              <th style="padding:12px;">Actual.</th>
+              <th style="padding:12px;">Desc.</th>
             </tr>
           </thead>
           <tbody>
@@ -171,22 +502,24 @@
                   {% include "seguimiento/_search_badge.html" with search_profile=run.search_profile %}
                 </td>
                 <td style="padding:12px;">
-                  {% if run.status == "running" %}
+                  {% if run.customer_status.kind == "partial" %}
+                    <span class="run-status-badge run-status-badge--completed">{{ run.customer_status.label }}</span>
+                  {% elif run.status == "running" %}
                     <span class="run-status-badge run-status-badge--running">{{ run.get_status_display }}</span>
                   {% elif run.status == "pending" %}
                     <span class="run-status-badge run-status-badge--pending">{{ run.get_status_display }}</span>
                   {% elif run.status == "failed" %}
-                    <span class="run-status-badge run-status-badge--error">{{ run.get_status_display }}</span>
+                    <span class="run-status-badge run-status-badge--error">{{ run.customer_status.label }}</span>
                   {% elif run.status == "completed" %}
                     <span class="run-status-badge run-status-badge--completed">{{ run.get_status_display }}</span>
                   {% else %}
                     {{ run.get_status_display }}
                   {% endif %}
                 </td>
-                <td style="padding:12px;">{{ run.total_found }}</td>
-                <td style="padding:12px;">{{ run.total_new }}</td>
-                <td style="padding:12px;">{{ run.total_updated }}</td>
-                <td style="padding:12px;">{{ run.total_errors }}</td>
+                <td style="padding:12px;">{{ run.list_metrics.found }}</td>
+                <td style="padding:12px;">{{ run.list_metrics.new }}</td>
+                <td style="padding:12px;">{{ run.list_metrics.updated }}</td>
+                <td style="padding:12px;">{{ run.list_metrics.discarded }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -223,4 +556,120 @@
       });
     })();
   </script>
+
+  <script>
+    (function () {
+      const buttons = document.querySelectorAll(".js-copy-capture-email");
+
+      buttons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          const targetId = button.getAttribute("data-copy-target");
+          const target = document.getElementById(targetId);
+
+          if (!target) return;
+
+          const value = target.textContent.trim();
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () {
+              const original = button.textContent;
+              button.textContent = "Copiado";
+              setTimeout(function () {
+                button.textContent = original;
+              }, 1400);
+            });
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = value;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+
+            const original = button.textContent;
+            button.textContent = "Copiado";
+            setTimeout(function () {
+              button.textContent = original;
+            }, 1400);
+          }
+        });
+      });
+    })();
+  </script>
+
+
+  <script>
+    (function () {
+      if (window.__sooiCaptureEmailHelpTooltip) return;
+      window.__sooiCaptureEmailHelpTooltip = true;
+
+      let tooltip = null;
+
+      function ensureTooltip() {
+        if (tooltip) return tooltip;
+
+        tooltip = document.createElement("div");
+        tooltip.className = "sooi-floating-help-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+
+        return tooltip;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(value, max));
+      }
+
+      function showTooltip(trigger) {
+        const source = trigger.querySelector(".sooi-capture-email-help__bubble");
+        if (!source) return;
+
+        const tip = ensureTooltip();
+        tip.innerHTML = source.innerHTML;
+        tip.style.display = "block";
+
+        const rect = trigger.getBoundingClientRect();
+        const width = tip.offsetWidth || 310;
+
+        let left = rect.left + (rect.width / 2) - (width / 2);
+        left = clamp(left, 12, window.innerWidth - width - 12);
+
+        let top = rect.bottom + 10;
+
+        const height = tip.offsetHeight || 120;
+        if (top + height > window.innerHeight - 12) {
+          top = rect.top - height - 10;
+        }
+
+        top = clamp(top, 12, window.innerHeight - height - 12);
+
+        tip.style.left = left + "px";
+        tip.style.top = top + "px";
+      }
+
+      function hideTooltip() {
+        if (tooltip) {
+          tooltip.style.display = "none";
+        }
+      }
+
+      document.querySelectorAll(".sooi-capture-email-help").forEach(function (trigger) {
+        trigger.addEventListener("mouseenter", function () {
+          showTooltip(trigger);
+        });
+
+        trigger.addEventListener("mouseleave", hideTooltip);
+
+        trigger.addEventListener("focus", function () {
+          showTooltip(trigger);
+        });
+
+        trigger.addEventListener("blur", hideTooltip);
+      });
+
+      window.addEventListener("scroll", hideTooltip, true);
+      window.addEventListener("resize", hideTooltip);
+    })();
+  </script>
+
 {% endblock %}

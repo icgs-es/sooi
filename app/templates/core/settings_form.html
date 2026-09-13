@@ -126,7 +126,13 @@
 
     <div class="actions" style="margin-top:14px;">
       <a class="btn" href="/app/fuentes/">Fuentes</a>
-      <a class="btn" href="/app/usuarios/">Usuarios</a>
+
+      {% if request.user.is_staff or request.user.is_superuser %}
+        <a class="btn" href="/app/usuarios/">Usuarios</a>
+        <a class="btn btn-primary" href="/gestion-interna-sooi-aefc94e8/" target="_blank" rel="noopener">
+          Admin SOOI
+        </a>
+      {% endif %}
     </div>
   </div>
   <style>

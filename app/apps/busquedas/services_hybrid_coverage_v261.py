@@ -5,13 +5,24 @@ import os
 import re
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from django.apps import apps
+from apps.busquedas.price import normalize_euro_price
+from apps.busquedas.provider_gateway import (
+    ProviderCircuit,
+    ProviderCircuitState,
+    ProviderOutcome,
+    ProviderResult,
+    call_provider,
+)
+from apps.busquedas.provider_query_provenance import query_provenance
 
 
 @dataclass(frozen=True)
@@ -20,20 +31,27 @@ class SourceSpec:
     domains: tuple[str, ...]
     method: str
     property_scope: str = "any"
+    tier: str | None = None
+    priority: int = 100
 
 
 SOURCE_SPECS: list[SourceSpec] = [
-    SourceSpec("idealista", ("idealista.com",), "openai_web_search"),
-    SourceSpec("fotocasa", ("fotocasa.es",), "deterministic"),
-    SourceSpec("habitaclia", ("habitaclia.com",), "deterministic"),
-    SourceSpec("pisos.com", ("pisos.com",), "openai_web_search"),
-    SourceSpec("yaencontre", ("yaencontre.com",), "openai_web_search"),
-    SourceSpec("milanuncios", ("milanuncios.com",), "openai_web_search"),
-    SourceSpec("servihabitat", ("servihabitat.com",), "openai_web_search"),
-    SourceSpec("solvia", ("solvia.es",), "openai_web_search"),
-    SourceSpec("altamira", ("altamirainmuebles.com",), "openai_web_search"),
-    SourceSpec("terrenos.es", ("terrenos.es",), "openai_web_search", property_scope="all"),
+    SourceSpec("idealista", ("idealista.com",), "openai_web_search", tier="ai_efficient", priority=10),
+    SourceSpec("fotocasa", ("fotocasa.es",), "deterministic", priority=10),
+    SourceSpec("habitaclia", ("habitaclia.com",), "deterministic", priority=20),
+    SourceSpec("pisos.com", ("pisos.com",), "openai_web_search", tier="ai_efficient", priority=20),
+    SourceSpec("yaencontre", ("yaencontre.com",), "openai_web_search", tier="ai_expansion", priority=10),
+    SourceSpec("milanuncios", ("milanuncios.com",), "openai_web_search", tier="ai_expansion", priority=20),
+    SourceSpec("servihabitat", ("servihabitat.com",), "openai_web_search", tier="ai_expansion", priority=30),
+    SourceSpec("solvia", ("solvia.es",), "openai_web_search", tier="ai_expansion", priority=40),
+    SourceSpec("altamira", ("altamirainmuebles.com",), "openai_web_search", tier="ai_expansion", priority=50),
+    SourceSpec("terrenos.es", ("terrenos.es",), "openai_web_search", property_scope="all", tier="ai_expansion", priority=60),
 ]
+
+
+_OPENAI_CIRCUIT_CONTEXT: ContextVar[ProviderCircuit | None] = ContextVar(
+    "openai_provider_circuit", default=None
+)
 
 
 UNAVAILABLE_PATTERNS = [
@@ -62,6 +80,14 @@ def _ascii_slug(value: str, sep: str = "-") -> str:
     value = value.encode("ascii", "ignore").decode("ascii").lower()
     value = re.sub(r"[^a-z0-9]+", sep, value)
     return value.strip(sep)
+
+
+def _canonical_query_decimal(value: Any) -> str:
+    """Return an accepted context amount without float conversion/exponents."""
+    rendered = format(Decimal(str(value)), "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered
 
 
 def _get_field(obj: Any, names: list[str], default: Any = None) -> Any:
@@ -109,7 +135,14 @@ def _profile_context(profile: Any) -> dict[str, Any]:
     max_price = _get_field(profile, ["max_price", "price_max", "precio_max", "budget_max"], None)
     min_price = _get_field(profile, ["min_price", "price_min", "precio_min", "budget_min"], None)
     bedrooms = _get_field(profile, ["min_bedrooms", "bedrooms_min", "rooms_min", "habitaciones_min"], None)
-    min_area = _get_field(profile, ["min_area", "area_min", "m2_min", "min_m2"], None)
+    min_area = _get_field(profile, ["min_area_m2", "min_area", "area_min", "m2_min", "min_m2"], None)
+    property_types = _get_field(
+        profile, ["property_types", "property_type", "tipo_inmueble"], [],
+    )
+    if isinstance(property_types, str):
+        property_types = [value.strip() for value in property_types.split(",") if value.strip()]
+    else:
+        property_types = list(property_types or [])
 
     return {
         "location": _clean_text(location),
@@ -119,7 +152,9 @@ def _profile_context(profile: Any) -> dict[str, Any]:
         "max_price": max_price,
         "min_price": min_price,
         "bedrooms": bedrooms,
+        "min_bedrooms": bedrooms,
         "min_area": min_area,
+        "property_types": property_types,
     }
 
 
@@ -162,33 +197,44 @@ def _extract_urls_from_text(text: str, domains: tuple[str, ...]) -> list[str]:
     return out
 
 
-def _loose_json(text: str) -> Any:
+def _strict_candidate_json(text: str) -> Any:
     raw = (text or "").strip()
-    raw = re.sub(r"^```(?:json)?", "", raw, flags=re.I).strip()
-    raw = re.sub(r"```$", "", raw).strip()
-
-    for candidate in [raw]:
-        try:
-            return json.loads(candidate)
-        except Exception:
-            pass
-
-    match = re.search(r"(\[[\s\S]*\]|\{[\s\S]*\})", raw)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except Exception:
-            return None
-    return None
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    # ``candidates`` is the sole documented compatibility wrapper. No prose,
+    # markdown fences, alternate keys, or embedded JSON fragments are accepted.
+    if isinstance(data, dict) and set(data) == {"candidates"}:
+        data = data["candidates"]
+    return data if isinstance(data, list) else None
 
 
-def _items_from_ai_text(text: str, spec: SourceSpec) -> list[dict[str, Any]]:
-    data = _loose_json(text)
-    if isinstance(data, dict):
-        for key in ["results", "items", "properties", "candidates", "anuncios"]:
-            if isinstance(data.get(key), list):
-                data = data[key]
-                break
+def _items_from_ai_text(
+    text: str, spec: SourceSpec, stage_trace: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    data = _strict_candidate_json(text)
+    raw_rows = None
+    if isinstance(data, list):
+        raw_rows = len(data)
+
+    if stage_trace is not None:
+        stage_trace["provider_response_present"] = (
+            bool(stage_trace.get("provider_response_present")) or bool(text)
+        )
+        if raw_rows is None:
+            stage_trace["provider_raw_item_count_inferable"] = False
+            if text:
+                stage_trace["format_noncompliance_count"] = (
+                    stage_trace.get("format_noncompliance_count", 0) + 1
+                )
+        else:
+            stage_trace.setdefault("provider_raw_item_count_inferable", True)
+            stage_trace["provider_raw_item_count"] = (
+                stage_trace.get("provider_raw_item_count", 0) + raw_rows
+            )
 
     items: list[dict[str, Any]] = []
 
@@ -199,30 +245,34 @@ def _items_from_ai_text(text: str, spec: SourceSpec) -> list[dict[str, Any]]:
             url = _normalize_url(row.get("source_url") or row.get("url") or row.get("link") or "")
             if not url or not _domain_matches(url, spec.domains):
                 continue
+            if spec.slug == "idealista" and _looks_like_listing_url_v261(spec.slug, url):
+                if stage_trace is not None:
+                    stage_trace["direct_listing_url_rejected"] = int(
+                        stage_trace.get("direct_listing_url_rejected", 0)
+                    ) + 1
+                continue
             items.append({
                 "source": spec.slug,
                 "source_url": url,
                 "title": _clean_text(row.get("title") or row.get("titulo") or ""),
                 "price": row.get("price") or row.get("precio"),
                 "location": _clean_text(row.get("location") or row.get("ubicacion") or ""),
+                "municipality": _clean_text(row.get("municipality") or row.get("municipio") or row.get("city") or row.get("locality") or ""),
+                "province": _clean_text(row.get("province") or row.get("provincia") or ""),
+                "bedrooms": row.get("bedrooms") or row.get("habitaciones"),
+                "area_m2": row.get("area_m2") or row.get("surface") or row.get("superficie"),
+                "property_type": _clean_text(row.get("property_type") or row.get("tipo") or ""),
                 "summary": _clean_text(row.get("summary") or row.get("descripcion") or row.get("description") or ""),
                 "raw": row,
                 "provider": "openai_web_search",
             })
+            if stage_trace is not None and not _clean_text(row.get("title") or row.get("titulo") or ""):
+                stage_trace["missing_title_count"] = int(stage_trace.get("missing_title_count", 0)) + 1
 
-    if not items:
-        for url in _extract_urls_from_text(text, spec.domains):
-            items.append({
-                "source": spec.slug,
-                "source_url": url,
-                "title": "",
-                "price": None,
-                "location": "",
-                "summary": "",
-                "raw": {},
-                "provider": "openai_web_search_regex",
-            })
-
+    if stage_trace is not None:
+        stage_trace["extracted_candidate_count"] = (
+            stage_trace.get("extracted_candidate_count", 0) + len(items)
+        )
     return _dedupe_candidates(items)
 
 
@@ -231,15 +281,22 @@ def _dedupe_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen = set()
     for item in items:
         url = _normalize_url(item.get("source_url", ""))
-        if not url or url in seen:
+        parsed = urlparse(url)
+        identity = (str(item.get("source") or parsed.netloc).lower(), parsed.netloc.lower(), parsed.path.rstrip("/"))
+        if not url or identity in seen:
             continue
-        seen.add(url)
+        seen.add(identity)
         item["source_url"] = url
         out.append(item)
     return out
 
 
 def _probe_url(url: str, timeout: int = 12) -> dict[str, Any]:
+    from .search_availability_semantics import (
+        AVAILABLE_CONFIRMED,
+        classify_listing_availability,
+    )
+
     result = {
         "http_status": None,
         "final_url": url,
@@ -247,6 +304,7 @@ def _probe_url(url: str, timeout: int = 12) -> dict[str, Any]:
         "available": False,
         "unavailable_reason": None,
         "error": None,
+        "availability_evidence": None,
     }
     try:
         req = Request(
@@ -258,25 +316,45 @@ def _probe_url(url: str, timeout: int = 12) -> dict[str, Any]:
         )
         with urlopen(req, timeout=timeout) as resp:
             body = resp.read(350000)
-            text = body.decode("utf-8", errors="ignore").lower()
+            html = body.decode("utf-8", errors="ignore")
+            text = html.lower()
             result["http_status"] = getattr(resp, "status", None)
             result["final_url"] = getattr(resp, "url", url)
             result["html_len"] = len(body)
+            # Ephemeral same-response payload for SR0.16C. It is removed before
+            # candidate/source evidence is persisted.
+            result["_detail_html"] = html
 
             for pattern in UNAVAILABLE_PATTERNS:
                 if pattern in text:
                     result["unavailable_reason"] = pattern
-                    result["available"] = False
-                    return result
+                    break
 
-            result["available"] = bool(result["http_status"] and 200 <= int(result["http_status"]) < 400 and len(body) > 500)
+            result["availability_evidence"] = classify_listing_availability(
+                requested_url=url,
+                status_code=result["http_status"],
+                final_url=result["final_url"],
+                html=html,
+                explicit_negative=(
+                    result["unavailable_reason"]
+                    if result["unavailable_reason"] and any(
+                        signal in result["unavailable_reason"]
+                        for signal in _STRONG_WITHDRAWN_REASONS
+                    ) else ""
+                ),
+            )
+            result["available"] = (
+                result["availability_evidence"]["state"] == AVAILABLE_CONFIRMED
+            )
 
     except HTTPError as e:
         result["http_status"] = e.code
         try:
             body = e.read(80000)
-            text = body.decode("utf-8", errors="ignore").lower()
+            html = body.decode("utf-8", errors="ignore")
+            text = html.lower()
             result["html_len"] = len(body)
+            result["_detail_html"] = html
             for pattern in UNAVAILABLE_PATTERNS:
                 if pattern in text:
                     result["unavailable_reason"] = pattern
@@ -284,12 +362,32 @@ def _probe_url(url: str, timeout: int = 12) -> dict[str, Any]:
         except Exception:
             pass
         result["error"] = f"HTTPError: {e.code}"
+        result["availability_evidence"] = classify_listing_availability(
+            requested_url=url,
+            status_code=result["http_status"],
+            final_url=result["final_url"],
+            html=locals().get("html", ""),
+            error=result["error"],
+            explicit_negative=(
+                result["unavailable_reason"]
+                if result["unavailable_reason"] and any(
+                    signal in result["unavailable_reason"]
+                    for signal in _STRONG_WITHDRAWN_REASONS
+                ) else ""
+            ),
+        )
 
     except URLError as e:
         result["error"] = f"URLError: {e.reason}"
+        result["availability_evidence"] = classify_listing_availability(
+            requested_url=url, status_code=None, final_url=url, html="", error=result["error"],
+        )
 
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
+        result["availability_evidence"] = classify_listing_availability(
+            requested_url=url, status_code=None, final_url=url, html="", error=result["error"],
+        )
 
     return result
 
@@ -307,18 +405,35 @@ def _deterministic_url(spec: SourceSpec, ctx: dict[str, Any]) -> str:
             params.append(f"hab={ctx['bedrooms']}")
         if ctx.get("min_area"):
             params.append(f"m2={ctx['min_area']}")
+        if ctx.get("min_price"):
+            params.append(f"pmin={_canonical_query_decimal(ctx['min_price'])}")
         if ctx.get("max_price"):
-            params.append(f"pmax={ctx['max_price']}")
+            params.append(f"pmax={_canonical_query_decimal(ctx['max_price'])}")
         qs = ("?" + "&".join(params)) if params else ""
         return f"https://www.habitaclia.com/{operation}-{_ascii_slug(loc, '_')}.htm{qs}"
 
     if spec.slug == "fotocasa":
-        return f"https://www.fotocasa.es/es/{operation}/viviendas/{_ascii_slug(loc)}/todas-las-zonas/l"
+        params = {}
+        if ctx.get("bedrooms"):
+            params["minRooms"] = ctx["bedrooms"]
+        if ctx.get("min_price"):
+            params["minPrice"] = _canonical_query_decimal(ctx["min_price"])
+        if ctx.get("max_price"):
+            params["maxPrice"] = _canonical_query_decimal(ctx["max_price"])
+        qs = ("?" + urlencode(params)) if params else ""
+        return (
+            f"https://www.fotocasa.es/es/{operation}/viviendas/"
+            f"{_ascii_slug(loc)}/todas-las-zonas/l{qs}"
+        )
 
     return ""
 
 
-def _deterministic_candidates(spec: SourceSpec, ctx: dict[str, Any], timeout: int) -> tuple[list[dict[str, Any]], str | None]:
+def _deterministic_candidates(
+    spec: SourceSpec, ctx: dict[str, Any], timeout: int,
+    provenance: list[dict[str, Any]] | None = None,
+    request_trace: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
     url = _deterministic_url(spec, ctx)
     if not url:
         return [], "no_location_for_deterministic_url"
@@ -330,6 +445,20 @@ def _deterministic_candidates(spec: SourceSpec, ctx: dict[str, Any], timeout: in
 
     try:
         res = probe_portal_url(spec.slug, url, municipality=ctx.get("location") or "", timeout=timeout)
+        if request_trace is not None and isinstance(res.get("result_telemetry"), dict):
+            request_trace.append({
+                "provider": spec.slug,
+                "geography": str(ctx.get("location") or ctx.get("province") or "unknown"),
+                **res["result_telemetry"],
+            })
+        if provenance is not None and isinstance(res.get("query_provenance"), dict):
+            item = dict(res["query_provenance"])
+            item["planned"] = {
+                **item.get("planned", {}),
+                "operation": _canonical_operation(ctx.get("operation")),
+                "geography": str(ctx.get("location") or ctx.get("province") or "unknown"),
+            }
+            provenance.append(item)
         candidates = (
             res.get("candidates")
             or res.get("items")
@@ -349,7 +478,12 @@ def _deterministic_candidates(spec: SourceSpec, ctx: dict[str, Any], timeout: in
                 "source_url": source_url,
                 "title": _clean_text(row.get("title") or row.get("titulo") or ""),
                 "price": row.get("price") or row.get("precio"),
-                "location": _clean_text(row.get("location") or row.get("ubicacion") or ctx.get("location") or ""),
+                "location": _clean_text(row.get("location") or row.get("ubicacion") or ""),
+                "municipality": _clean_text(row.get("municipality") or row.get("municipio") or row.get("city") or row.get("locality") or ""),
+                "province": _clean_text(row.get("province") or row.get("provincia") or ""),
+                "bedrooms": row.get("bedrooms") or row.get("habitaciones"),
+                "area_m2": row.get("area_m2") or row.get("surface") or row.get("superficie"),
+                "property_type": _clean_text(row.get("property_type") or row.get("tipo") or ""),
                 "summary": _clean_text(row.get("summary") or row.get("description") or ""),
                 "raw": row,
                 "provider": "deterministic",
@@ -383,6 +517,104 @@ def _source_url_rules_v2616(spec: SourceSpec) -> str:
 
     return "Regla URL: prioriza ficha individual concreta de inmueble; nunca listados ni páginas genéricas."
 
+
+def _contract_scalar(value: Any) -> str:
+    if value in (None, ""):
+        return "null"
+    try:
+        number = float(value)
+        return str(int(number)) if number.is_integer() else format(number, "g")
+    except (TypeError, ValueError):
+        return str(value).strip()
+
+
+def _canonical_operation(value: Any) -> str:
+    return "rent" if str(value or "").strip().lower() in {"rent", "alquiler"} else "sale"
+
+
+def _structured_constraint_block(ctx: dict[str, Any]) -> str:
+    locations = [str(value).strip() for value in (ctx.get("search_locations") or []) if value]
+    if not locations:
+        location = ctx.get("location") or ctx.get("province")
+        locations = [str(location).strip()] if location else []
+    property_types = [str(value).strip() for value in (ctx.get("property_types") or []) if value]
+    return "\n".join((
+        "SOOI_SEARCH_CONSTRAINTS_V1",
+        f"operation={_canonical_operation(ctx.get('operation'))}",
+        f"min_price={_contract_scalar(ctx.get('min_price'))}",
+        f"max_price={_contract_scalar(ctx.get('max_price'))}",
+        f"min_bedrooms={_contract_scalar(ctx.get('min_bedrooms', ctx.get('bedrooms')))}",
+        f"property_types={','.join(property_types) if property_types else 'any'}",
+        f"bounded_municipalities={'|'.join(locations)}",
+        "END_SOOI_SEARCH_CONSTRAINTS_V1",
+    ))
+
+
+DEFAULT_EXTERNAL_SOURCE_CAP = 10
+IDEALISTA_EXTERNAL_RESULT_CAP = 30
+IDEALISTA_QUERY_PLAN_MAX_GROUPS = 4
+
+
+def _external_result_cap(spec: SourceSpec, requested: int) -> int:
+    """Bound external-source output without changing deterministic providers."""
+    requested_cap = max(1, int(requested or DEFAULT_EXTERNAL_SOURCE_CAP))
+    if spec.slug == "idealista" and spec.method == "openai_web_search":
+        return IDEALISTA_EXTERNAL_RESULT_CAP
+    if spec.method == "openai_web_search":
+        return min(DEFAULT_EXTERNAL_SOURCE_CAP, requested_cap)
+    return requested_cap
+
+
+def _idealista_query_groups(ctx: dict[str, Any], max_groups: int = IDEALISTA_QUERY_PLAN_MAX_GROUPS) -> list[list[str]]:
+    locations = [str(value).strip() for value in (ctx.get("search_locations") or []) if str(value).strip()]
+    if not locations:
+        location = str(ctx.get("location") or ctx.get("province") or "").strip()
+        locations = [location] if location else []
+    count = min(max(1, int(max_groups)), len(locations)) if locations else 0
+    groups = [[] for _ in range(count)]
+    for index, location in enumerate(locations):
+        groups[index % count].append(location)
+    return groups
+
+
+_OPENAI_CANDIDATE_TEXT_CONFIG = {
+    "format": {
+        "type": "json_schema",
+        "name": "property_candidates",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "source_url": {"type": "string"},
+                            "title": {"type": "string"},
+                            "price": {"type": ["number", "string"]},
+                            "municipality": {"type": "string"},
+                            "bedrooms": {"type": "number"},
+                            "property_type": {
+                                "type": "string",
+                                "enum": ["house", "flat", "land", "commercial"],
+                            },
+                            "area_m2": {"type": ["number", "null"]},
+                        },
+                        "required": [
+                            "source_url", "title", "price", "municipality", "bedrooms",
+                            "property_type", "area_m2",
+                        ],
+                    },
+                },
+            },
+            "required": ["candidates"],
+        },
+    },
+}
+
 def _openai_prompt(spec: SourceSpec, ctx: dict[str, Any], max_results: int) -> str:
     if spec.slug == "idealista":
         domains = f"{', '.join(spec.domains)} — devuelve solo URLs de este dominio si las encuentras"
@@ -404,19 +636,31 @@ def _openai_prompt(spec: SourceSpec, ctx: dict[str, Any], max_results: int) -> s
         filters.append(f"habitaciones mínimas {ctx['bedrooms']}")
     if ctx.get("min_area"):
         filters.append(f"superficie mínima {ctx['min_area']} m2")
+    property_types = [str(value) for value in (ctx.get("property_types") or []) if value]
+    if property_types:
+        filters.append(f"tipos de inmueble {', '.join(property_types)}")
 
     filter_text = ", ".join(filters) if filters else "sin filtros adicionales claros"
     source_rules = _source_url_rules_v2616(spec)
+    constraint_block = _structured_constraint_block(ctx)
 
     search_locations = ctx.get("search_locations") or []
     if search_locations and len(search_locations) > 1:
         location_instruction = (
-            f"{operation} vivienda/inmueble en la provincia de {ctx.get('province') or location}. "
-            f"No limites la búsqueda a la capital. Busca también en estos municipios: "
-            f"{', '.join(search_locations)}."
+            f"Operación exacta: {operation}. Usa exclusivamente los municipios autorizados "
+            "del bloque SOOI_SEARCH_CONSTRAINTS_V1 para este lote."
         )
     else:
         location_instruction = f"{operation} vivienda/inmueble en {location}."
+
+    query_plan_instruction = ""
+    if spec.slug == "idealista":
+        groups = _idealista_query_groups(ctx)
+        query_plan_instruction = (
+            "Plan geográfico interno acotado (una sola expansión SOOI): "
+            + " | ".join(f"grupo {index + 1}: {', '.join(group)}" for index, group in enumerate(groups))
+            + ". Busca de forma distribuida entre todos los grupos; no concentres la salida en una sola localidad."
+        )
 
     return f"""
 Busca anuncios inmobiliarios reales y actuales exclusivamente en {spec.slug}.
@@ -426,6 +670,10 @@ Busca anuncios inmobiliarios reales y actuales exclusivamente en {spec.slug}.
 
 Consulta:
 {location_instruction} Filtros: {filter_text}.
+{query_plan_instruction}
+
+Restricciones autoritativas (valores exactos de máquina):
+{constraint_block}
 
 Reglas:
 - {domain_rule}
@@ -433,32 +681,52 @@ Reglas:
 - Prioriza fichas individuales reales de inmueble frente a listados.\n- {source_rules}
 - No devuelvas páginas de búsqueda genéricas si puedes devolver fichas individuales.
 - En búsquedas provinciales, reparte resultados entre municipios si existen candidatos fiables.
-- Respeta estrictamente precio máximo, dormitorios mínimos y operación.
-- Si no encuentras resultados fiables, devuelve [].
+- municipality debe ser el municipio/localidad explícito del anuncio, nunca la provincia, el dominio, la URL ni la consulta usada para encontrarlo. Usa null si no hay evidencia explícita.
+- Conserva en location el texto mostrado, incluidos barrios o distritos; no lo uses como sustituto de municipality.
+- Cada candidato debe satisfacer TODOS los filtros duros indicados: operación, municipio
+  autorizado, precio mínimo/máximo cuando exista, dormitorios mínimos, tipos de inmueble
+  permitidos y superficie mínima cuando exista.
+- Devuelve exclusivamente URLs de fichas individuales/detalle exactas. No incluyas a sabiendas
+  ningún candidato fuera de rango ni con un filtro duro desconocido.
+- Si no encuentras candidatos fiables que satisfagan TODOS los filtros, devuelve [].
+- Este lote es una consulta acotada; no afirmes cobertura completa del mercado ni de la geografía.
 - Máximo {max_results} resultados.
-- Formato estricto JSON, sin explicación:
+- Devuelve SOLO el objeto JSON conforme al contrato; cero resultados es {{"candidates": []}}. Sin markdown,
+  comentarios, explicación, prefijo ni sufijo.
+- Formato estricto JSON:
 
-[
+{{"candidates": [
   {{
-    "title": "string",
+    "title": "título breve del anuncio",
     "source_url": "https://...",
-    "price": "string or null",
-    "location": "string",
-    "summary": "string"
+    "price": "number or numeric string",
+    "municipality": "explicit municipality/locality string",
+    "bedrooms": "number",
+    "area_m2": "number or null",
+    "property_type": "house, flat, land, or commercial"
   }}
-]
+]}}
 """.strip()
 
 
-def _call_openai_web_search(prompt: str) -> tuple[str, str | None]:
+def _call_openai_web_search(
+    prompt: str, circuit: ProviderCircuit | None = None,
+    provenance: list[dict[str, Any]] | None = None,
+    source_provider: str = "unknown",
+) -> ProviderResult[str]:
+    circuit = circuit or _OPENAI_CIRCUIT_CONTEXT.get() or ProviderCircuit("openai")
+    if circuit.state.value == "OPEN":
+        return call_provider(circuit, lambda: "")
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return "", "OPENAI_API_KEY_not_configured"
+        circuit.open("OPENAI_API_KEY_not_configured")
+        return ProviderResult(ProviderOutcome.HARD_FAILURE, reason=circuit.reason)
 
     try:
         from openai import OpenAI
     except Exception as e:
-        return "", f"openai_import_error: {type(e).__name__}: {e}"
+        circuit.open(f"openai_import_error: {type(e).__name__}: {e}")
+        return ProviderResult(ProviderOutcome.HARD_FAILURE, reason=circuit.reason)
 
     model = (
         os.environ.get("SOOI_OPENAI_WEB_SEARCH_MODEL")
@@ -467,54 +735,54 @@ def _call_openai_web_search(prompt: str) -> tuple[str, str | None]:
         or "gpt-4.1-mini"
     )
 
-    client = OpenAI(api_key=api_key)
+    client_result = call_provider(circuit, lambda: OpenAI(api_key=api_key, max_retries=0))
+    if client_result.outcome is not ProviderOutcome.SUCCESS:
+        return client_result
+    client = client_result.value
 
-    last_error = None
+    last_result: ProviderResult[str] | None = None
     for tool_type in ["web_search", "web_search_preview"]:
-        try:
-            response = client.responses.create(
+        def execute_openai_request(tool_type=tool_type):
+            # Closest observable SDK boundary. HTTP status and final location
+            # are not exposed here, so those response fields remain unknown.
+            if provenance is not None:
+                provenance.append(query_provenance(
+                    source_provider, "", "https://api.openai.com/v1/responses",
+                    operation="web_search", geography="provider_tool",
+                ))
+            return client.responses.create(
                 model=model,
                 input=prompt,
                 tools=[{"type": tool_type}],
+                text=_OPENAI_CANDIDATE_TEXT_CONFIG,
             )
+        result = call_provider(
+            circuit,
+            execute_openai_request,
+        )
+        if result.outcome is ProviderOutcome.SUCCESS:
+            response = result.value
             text = getattr(response, "output_text", "") or ""
-            if not text:
-                try:
-                    text = response.model_dump_json()
-                except Exception:
-                    text = str(response)
-            return text, None
-        except Exception as e:
-            last_error = f"{type(e).__name__}: {e}"
+            return ProviderResult(ProviderOutcome.SUCCESS, value=text)
+        last_result = result
+        if result.outcome in (ProviderOutcome.HARD_FAILURE, ProviderOutcome.SKIPPED_CIRCUIT):
+            return result
+        reason = str(result.reason or "").lower().replace("-", "_")
+        if tool_type == "web_search" and not any(marker in reason for marker in (
+            "invalid value: 'web_search'", 'invalid value: "web_search"',
+            "unsupported tool variant", "unknown tool type web_search",
+        )):
+            return result
 
-    return "", last_error or "openai_web_search_failed"
+    return last_result or ProviderResult(
+        ProviderOutcome.RETRYABLE_FAILURE, reason="openai_web_search_failed"
+    )
 
 
 
 def _to_float(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    try:
-        return float(value)
-    except Exception:
-        pass
-
-    raw = str(value).strip()
-    clean = re.sub(r"[^\d,\.]", "", raw)
-    if not clean:
-        return None
-
-    if "," in clean and "." in clean:
-        clean = clean.replace(".", "").replace(",", ".")
-    elif "," in clean:
-        clean = clean.replace(",", ".")
-    elif clean.count(".") > 1:
-        clean = clean.replace(".", "")
-
-    try:
-        return float(clean)
-    except Exception:
-        return None
+    normalized = normalize_euro_price(value)
+    return float(normalized) if normalized is not None else None
 
 
 def _candidate_constraint_violations(ctx: dict[str, Any], item: dict[str, Any]) -> list[str]:
@@ -533,32 +801,345 @@ def _candidate_constraint_violations(ctx: dict[str, Any], item: dict[str, Any]) 
     if price is not None and price < 10:
         violations.append(f"price_implausible:{price:g}")
 
+    bedrooms = _to_float(item.get("bedrooms"))
+    min_bedrooms = _to_float(ctx.get("bedrooms"))
+    if bedrooms is not None and min_bedrooms is not None and bedrooms < min_bedrooms:
+        violations.append(f"bedrooms_below_min:{bedrooms:g}<{min_bedrooms:g}")
+
+    area = _to_float(item.get("area_m2"))
+    min_area = _to_float(ctx.get("min_area"))
+    if area is not None and min_area is not None and area < min_area:
+        violations.append(f"area_below_min:{area:g}<{min_area:g}")
+
+    wanted_types = {_ascii_slug(value) for value in (ctx.get("property_types") or []) if value}
+    candidate_type = _ascii_slug(str(item.get("property_type") or ""))
+    type_aliases = {
+        "casa": "house", "chalet": "house", "house": "house",
+        "piso": "flat", "apartamento": "flat", "flat": "flat",
+        "terreno": "land", "parcela": "land", "land": "land",
+        "local": "commercial", "commercial": "commercial",
+    }
+    if candidate_type and wanted_types:
+        normalized_wanted = {type_aliases.get(value, value) for value in wanted_types}
+        normalized_candidate = type_aliases.get(candidate_type, candidate_type)
+        if normalized_candidate not in normalized_wanted:
+            violations.append(f"property_type_mismatch:{candidate_type}")
+
+    if ctx.get("location_scope") in {"multi_location", "comarca", "municipality"}:
+        wanted_locations = [
+            _norm_place_text(value) for value in (ctx.get("search_locations") or []) if value
+        ]
+        if not wanted_locations and ctx.get("location"):
+            wanted_locations = [_norm_place_text(ctx.get("location"))]
+        municipality = _norm_place_text(item.get("municipality"))
+        intent_rows = ctx.get("intent_resolutions") or []
+        if intent_rows:
+            from .geography_runtime import candidate_location_match
+            comparison = candidate_location_match(intent_rows, item.get("municipality"))
+            if comparison == "MISMATCH":
+                violations.append("location_outside_search_scope")
+            elif comparison == "LEGACY" and wanted_locations and municipality not in wanted_locations:
+                violations.append("location_outside_search_scope")
+        elif wanted_locations and municipality and municipality not in wanted_locations:
+            violations.append("location_outside_search_scope")
+
     return violations
 
-def _classify_candidate(spec: SourceSpec, item: dict[str, Any], ctx: dict[str, Any], timeout: int) -> dict[str, Any]:
-    url = item["source_url"]
-    probe = _probe_url(url, timeout=timeout)
 
+def _candidate_constraint_unknowns(ctx: dict[str, Any], item: dict[str, Any]) -> list[str]:
+    """Return constrained attributes for which neither match nor mismatch is provable."""
+    unknowns: list[str] = []
+
+    if (ctx.get("min_price") not in (None, "") or ctx.get("max_price") not in (None, "")) \
+            and _to_float(item.get("price")) is None:
+        unknowns.append("unknown_required_attribute:price")
+
+    if ctx.get("bedrooms") not in (None, "") and _to_float(item.get("bedrooms")) is None:
+        unknowns.append("unknown_required_attribute:bedrooms")
+
+    if ctx.get("min_area") not in (None, "") and _to_float(item.get("area_m2")) is None:
+        unknowns.append("unknown_required_attribute:area_m2")
+
+    wanted_types = [value for value in (ctx.get("property_types") or []) if value]
+    if wanted_types and not _ascii_slug(str(item.get("property_type") or "")):
+        unknowns.append("unknown_required_attribute:property_type")
+
+    if ctx.get("location_scope") in {"multi_location", "comarca", "municipality"}:
+        wanted_locations = [
+            _norm_place_text(value) for value in (ctx.get("search_locations") or []) if value
+        ]
+        if not wanted_locations and ctx.get("location"):
+            wanted_locations = [_norm_place_text(ctx.get("location"))]
+        if wanted_locations and not _norm_place_text(item.get("municipality")):
+            unknowns.append("unknown_required_attribute:location")
+
+    return unknowns
+
+
+_STRONG_WITHDRAWN_REASONS = (
+    "ya no está publicado", "ya no esta publicado", "lo dio de baja", "dado de baja",
+    "retirado", "withdrawn", "deleted",
+)
+
+
+def _classify_probe_outcome(probe: dict[str, Any]) -> tuple[str, str]:
+    """Classify availability evidence as MATCH, MISMATCH, or UNKNOWN."""
+    evidence = probe.get("availability_evidence")
+    if isinstance(evidence, dict):
+        state = str(evidence.get("state") or "").lower()
+        signal = str(evidence.get("signal") or "inconclusive").lower()
+        if state == "unavailable":
+            return "MISMATCH", f"availability_unavailable:{signal}"
+        if state == "confirmed":
+            return "MATCH", f"availability_match:{signal}"
+        return "UNKNOWN", f"availability_unknown:{signal}"
+
+    status = probe.get("http_status")
+    try:
+        status_i = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        status_i = None
+
+    if status_i in {404, 410}:
+        return "MISMATCH", f"availability_unavailable:http_{status_i}"
+
+    reason = str(probe.get("unavailable_reason") or "").strip().lower()
+    if reason and any(signal in reason for signal in _STRONG_WITHDRAWN_REASONS):
+        return "MISMATCH", f"availability_unavailable:{reason}"
+
+    if status_i in {408, 425, 429}:
+        return "UNKNOWN", f"availability_unknown:http_{status_i}"
+    if status_i in {401, 403}:
+        return "UNKNOWN", f"availability_unknown:http_{status_i}"
+    if status_i is not None and 500 <= status_i <= 599:
+        return "UNKNOWN", "availability_unknown:http_5xx"
+
+    error = str(probe.get("error") or "").lower()
+    if error:
+        if "timeout" in error or "timed out" in error:
+            return "UNKNOWN", "availability_unknown:timeout"
+        return "UNKNOWN", "availability_unknown:network"
+
+    if reason:
+        return "UNKNOWN", "availability_unknown:http_200_ambiguous_text"
+    if probe.get("available") is True:
+        return "MATCH", "availability_match:probe_available"
+    return "UNKNOWN", "availability_unknown:inconclusive"
+
+def _candidate_detail_url_is_valid(spec: SourceSpec, url: str) -> bool:
+    """Accept only provider-owned URLs already proven to be listing details."""
+    if not url or not _domain_matches(url, spec.domains):
+        return False
+    if spec.slug not in {"fotocasa", "habitaclia"}:
+        return True
+    from .services_portal_extractors import (
+        is_fotocasa_listing_url,
+        is_habitaclia_listing_url,
+    )
+    validator = is_fotocasa_listing_url if spec.slug == "fotocasa" else is_habitaclia_listing_url
+    return bool(validator(url))
+
+
+def _availability_probe_metadata(*, attempted: bool, provider: str, probe=None,
+                                 outcome: str = "not_eligible", signal: str = "") -> dict[str, Any]:
+    probe = probe if isinstance(probe, dict) else {}
+    evidence = probe.get("availability_evidence")
+    if isinstance(evidence, dict):
+        outcome = str(evidence.get("state") or outcome)
+        signal = str(evidence.get("signal") or signal)
+    status = probe.get("http_status")
+    try:
+        status_class = f"{int(status) // 100}xx" if status is not None else "unknown"
+    except (TypeError, ValueError):
+        status_class = "unknown"
+    return {
+        "attempted": bool(attempted),
+        "provider": provider,
+        "outcome": outcome,
+        "status_class": status_class,
+        "signal": signal or ("not_eligible" if not attempted else "inconclusive"),
+    }
+
+
+def _unknown_only_detail_enrichment(
+    verdict: dict[str, Any], *, html: str, requested_url: str, final_url: str,
+    allow_fotocasa_initial_props: bool = True,
+) -> dict[str, Any]:
+    from .services_portal_extractors import (
+        extract_fotocasa_initial_props_detail_attributes,
+        extract_same_listing_detail_attributes,
+    )
+
+    jsonld = extract_same_listing_detail_attributes(html, requested_url, final_url)
+    initial = (
+        extract_fotocasa_initial_props_detail_attributes(html, requested_url, final_url)
+        if allow_fotocasa_initial_props else
+        {"identity_matched": False, "attributes": {}, "conflicts": {}}
+    )
+    jsonld_attributes = jsonld.get("attributes") if jsonld.get("identity_matched") else {}
+    initial_attributes = initial.get("attributes") if initial.get("identity_matched") else {}
+    jsonld_attributes = jsonld_attributes if isinstance(jsonld_attributes, dict) else {}
+    initial_attributes = initial_attributes if isinstance(initial_attributes, dict) else {}
+    initial_conflicts = initial.get("conflicts") if isinstance(initial.get("conflicts"), dict) else {}
+    evidence: dict[str, dict[str, Any]] = {}
+    conflict = False
+
+    mappings = {
+        "price": ("price",),
+        "bedrooms": ("bedrooms",),
+        "property_type": ("property_type",),
+        "location": ("municipality", "location"),
+        "province": ("province",),
+    }
+    for evidence_key, target_fields in mappings.items():
+        source_key = "municipality" if evidence_key == "location" else evidence_key
+        if jsonld_attributes.get(source_key) not in (None, ""):
+            detail_value = jsonld_attributes[source_key]
+            source = "jsonld"
+            extraction_conflict = False
+        else:
+            detail_value = initial_attributes.get(source_key)
+            source = "fotocasa_initial_props" if (
+                detail_value not in (None, "") or initial_conflicts.get(source_key)
+            ) else "unknown"
+            extraction_conflict = bool(initial_conflicts.get(source_key))
+        filled = False
+        field_conflict = extraction_conflict
+        if detail_value not in (None, ""):
+            known_values = [verdict.get(field) for field in target_fields if verdict.get(field) not in (None, "")]
+            if known_values:
+                field_conflict = field_conflict or any(
+                    str(value).strip().casefold() != str(detail_value).strip().casefold()
+                    for value in known_values
+                )
+            else:
+                for field in target_fields:
+                    verdict[field] = detail_value
+                filled = True
+        conflict = conflict or field_conflict
+        evidence[evidence_key] = {
+            "source": source,
+            "filled": filled,
+            "conflict": field_conflict,
+        }
+
+    return {
+        "identity_matched": bool(jsonld.get("identity_matched") or initial.get("identity_matched")),
+        "identity_sources": {
+            "jsonld": bool(jsonld.get("identity_matched")),
+            "fotocasa_initial_props": bool(initial.get("identity_matched")),
+        },
+        "fields": evidence,
+        "detail_attribute_conflict": conflict,
+    }
+
+
+def _classify_candidate(spec: SourceSpec, item: dict[str, Any], ctx: dict[str, Any], timeout: int,
+                        *, probe_cache: dict[str, dict[str, Any]] | None = None,
+                        allow_detail_probe: bool = True,
+                        targeted_detail: bool = False) -> dict[str, Any]:
+    url = item["source_url"]
     verdict = {
         "url": url,
         "title": item.get("title") or "",
         "price": item.get("price"),
         "location": item.get("location") or "",
+        "municipality": item.get("municipality") or "",
+        "province": item.get("province") or "",
+        "bedrooms": item.get("bedrooms"),
+        "area_m2": item.get("area_m2"),
+        "property_type": item.get("property_type") or "",
         "provider": item.get("provider"),
+        "search_location": item.get("search_location"),
+        "search_location_batch": item.get("search_location_batch"),
         "classification": "reviewable",
         "reason": "default_reviewable",
-        "probe": probe,
+        "probe": {},
+        "availability_evidence": None,
     }
 
-    if probe.get("http_status") == 404 or probe.get("unavailable_reason"):
+    violations = _candidate_constraint_violations(ctx, item)
+    if violations and targeted_detail:
         verdict["classification"] = "discarded"
-        verdict["reason"] = probe.get("unavailable_reason") or "http_404_or_unavailable"
+        verdict["reason"] = ";".join(violations)
+        verdict["hard_violations"] = violations
+        verdict["availability_probe"] = _availability_probe_metadata(
+            attempted=False, provider=spec.slug, signal="hard_rejected",
+        )
         return verdict
 
-    violations = _candidate_constraint_violations(ctx, item)
+    if targeted_detail and (not allow_detail_probe or not _candidate_detail_url_is_valid(spec, url)):
+        verdict["classification"] = "reviewable"
+        verdict["reason"] = "availability_unknown:detail_url_required"
+        verdict["availability_probe"] = _availability_probe_metadata(
+            attempted=False, provider=spec.slug, outcome="unknown", signal="detail_url_required",
+        )
+        return verdict
+
+    cache_key = _normalize_url(url)
+    deduplicated = probe_cache is not None and cache_key in probe_cache
+    if deduplicated:
+        probe = probe_cache[cache_key]
+    else:
+        probe = _probe_url(url, timeout=timeout)
+        if probe_cache is not None:
+            probe_cache[cache_key] = probe
+    evidence = probe.get("availability_evidence")
+    if (
+        isinstance(evidence, dict)
+        and evidence.get("state") == "confirmed"
+        and not _domain_matches(str(probe.get("final_url") or ""), spec.domains)
+    ):
+        probe = dict(probe)
+        probe["available"] = False
+        probe["availability_evidence"] = {
+            "state": "unknown",
+            "signal": "unexpected_final_domain",
+            "source": "redirect",
+        }
+        if probe_cache is not None:
+            probe_cache[cache_key] = probe
+    if targeted_detail:
+        final_url = str(probe.get("final_url") or url)
+        verdict["detail_attribute_evidence"] = _unknown_only_detail_enrichment(
+            verdict,
+            html=(
+                str(probe.get("_detail_html") or "")
+                if _domain_matches(final_url, spec.domains) else ""
+            ),
+            requested_url=url,
+            final_url=final_url,
+            allow_fotocasa_initial_props=(
+                spec.slug == "fotocasa"
+                and str((probe.get("availability_evidence") or {}).get("state") or "") != "unavailable"
+            ),
+        )
+    persisted_probe = {key: value for key, value in probe.items() if key != "_detail_html"}
+    verdict["probe"] = persisted_probe
+    verdict["availability_evidence"] = probe.get("availability_evidence")
+    verdict["availability_probe"] = _availability_probe_metadata(
+        attempted=not deduplicated, provider=spec.slug, probe=probe,
+        signal="deduplicated" if deduplicated else "",
+    )
+    verdict["availability_probe"]["deduplicated"] = deduplicated
+
+    violations = _candidate_constraint_violations(ctx, verdict)
     if violations:
         verdict["classification"] = "discarded"
         verdict["reason"] = ";".join(violations)
+        verdict["hard_violations"] = violations
+        return verdict
+
+    availability_state, availability_reason = _classify_probe_outcome(probe)
+    if availability_state == "MISMATCH":
+        verdict["classification"] = "discarded"
+        verdict["reason"] = availability_reason
+        return verdict
+
+    unknowns = _candidate_constraint_unknowns(ctx, verdict)
+    if unknowns or availability_state == "UNKNOWN":
+        verdict["classification"] = "reviewable"
+        verdict["reason"] = ";".join(unknowns + ([availability_reason] if availability_state == "UNKNOWN" else []))
         return verdict
 
     if spec.slug == "idealista":
@@ -566,12 +1147,12 @@ def _classify_candidate(spec: SourceSpec, item: dict[str, Any], ctx: dict[str, A
         verdict["reason"] = "idealista_never_auto_captured_without_strong_validation"
         return verdict
 
-    if item.get("provider") == "deterministic" and probe.get("available"):
+    if item.get("provider") == "deterministic" and availability_state == "MATCH":
         verdict["classification"] = "verified"
         verdict["reason"] = "deterministic_candidate_probe_available"
         return verdict
 
-    if probe.get("available"):
+    if availability_state == "MATCH":
         verdict["classification"] = "reviewable"
         verdict["reason"] = "ai_candidate_probe_available"
         return verdict
@@ -579,6 +1160,48 @@ def _classify_candidate(spec: SourceSpec, item: dict[str, Any], ctx: dict[str, A
     verdict["classification"] = "reviewable"
     verdict["reason"] = "not_strong_enough_to_verify_but_not_discarded"
     return verdict
+
+
+def _detail_verification_counters(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counters = {
+        "detail_verification_eligible": 0,
+        "detail_verification_attempted": 0,
+        "detail_verification_confirmed": 0,
+        "detail_verification_unknown": 0,
+        "detail_verification_unavailable": 0,
+        "detail_verification_deduplicated": 0,
+    }
+    for candidate in candidates:
+        metadata = candidate.get("availability_probe") or {}
+        if metadata.get("signal") != "hard_rejected":
+            counters["detail_verification_eligible"] += 1
+        if metadata.get("attempted"):
+            counters["detail_verification_attempted"] += 1
+        if metadata.get("deduplicated"):
+            counters["detail_verification_deduplicated"] += 1
+        outcome = str(metadata.get("outcome") or "")
+        key = f"detail_verification_{outcome}"
+        if key in counters:
+            counters[key] += 1
+    return counters
+
+
+def _classify_targeted_detail_candidates(
+    spec: SourceSpec, items: list[dict[str, Any]], ctx: dict[str, Any], timeout: int,
+    *, probe_cache: dict[str, dict[str, Any]], cap: int,
+) -> list[dict[str, Any]]:
+    """Bounded, at-most-once detail verification for deterministic listings."""
+    verdicts: list[dict[str, Any]] = []
+    attempted = 0
+    for item in items:
+        verdict = _classify_candidate(
+            spec, item, ctx=ctx, timeout=timeout, probe_cache=probe_cache,
+            allow_detail_probe=attempted < max(0, int(cap)), targeted_detail=True,
+        )
+        if (verdict.get("availability_probe") or {}).get("attempted"):
+            attempted += 1
+        verdicts.append(verdict)
+    return verdicts
 
 
 def _coverage_row(spec: SourceSpec, attempted: bool, method: str, status: str, error: str | None = None) -> dict[str, Any]:
@@ -593,6 +1216,21 @@ def _coverage_row(spec: SourceSpec, attempted: bool, method: str, status: str, e
         "discarded": 0,
         "error": error,
         "candidates": [],
+        "query_provenance": [],
+        "deterministic_request_telemetry": [],
+        "stage_counters": {
+            "provider_response_present": False,
+            "provider_raw_item_count": "UNKNOWN",
+            "extracted_candidate_count": 0,
+            "normalized_or_deduped_candidate_count": 0,
+            "accepted_candidate_count": 0,
+            "rejected_geography_count": 0,
+            "rejected_price_count": 0,
+            "rejected_bedroom_count": 0,
+            "rejected_property_type_count": 0,
+            "rejected_missing_evidence_count": 0,
+            "format_noncompliance_count": 0,
+        },
     }
 
 
@@ -824,6 +1462,8 @@ def _capture_has_property_opportunity_v261(capture_id: int | None) -> bool:
         return False
 
 def _build_action_plan(source_coverage: list[dict[str, Any]]) -> dict[str, Any]:
+    from .search_quality_semantics import result_actionability
+
     actions: list[dict[str, Any]] = []
     totals: dict[str, int] = {}
 
@@ -832,13 +1472,14 @@ def _build_action_plan(source_coverage: list[dict[str, Any]]) -> dict[str, Any]:
         for item in source_row.get("candidates") or []:
             url = item.get("url") or ""
             classification = item.get("classification") or "unknown"
+            actionability = result_actionability(item)
             existing_id = _existing_capture_id_for_url(url) if url else None
 
             action = "skip_unknown"
             target_status = None
 
             if existing_id:
-                if classification == "discarded":
+                if actionability["availability_state"] == "UNAVAILABLE" or classification == "discarded":
                     if _capture_has_property_opportunity_v261(existing_id):
                         action = "skip_existing_opportunity_unavailable"
                     else:
@@ -846,10 +1487,13 @@ def _build_action_plan(source_coverage: list[dict[str, Any]]) -> dict[str, Any]:
                 else:
                     action = "skip_duplicate"
             else:
-                if classification == "verified":
+                if actionability["actionable"]:
                     action = "would_create_captured"
                     target_status = "captured"
                 elif classification == "reviewable":
+                    # A review candidate belongs in the capture inbox.  It
+                    # remains non-actionable and must not create an
+                    # opportunity; the inbox is the human-review boundary.
                     action = "would_create_in_review"
                     target_status = "in_review"
                 elif classification == "discarded":
@@ -865,9 +1509,12 @@ def _build_action_plan(source_coverage: list[dict[str, Any]]) -> dict[str, Any]:
                 "existing_capture_id": existing_id,
                 "action": action,
                 "target_status": target_status,
+                "actionability": actionability,
                 "title": item.get("title"),
                 "price": item.get("price"),
                 "location": item.get("location"),
+                "municipality": item.get("municipality"),
+                "province": item.get("province"),
             })
 
     return {
@@ -943,6 +1590,7 @@ def _apply_action_plan_to_db(
 
     now = timezone.now()
     created_ids: list[int] = []
+    created_review_ids: list[int] = []
     updated_ids: list[int] = []
     skipped: list[dict[str, Any]] = []
 
@@ -980,11 +1628,16 @@ def _apply_action_plan_to_db(
                     skipped.append({"url": url, "reason": "duplicate", "existing_capture_id": existing_id})
                 continue
 
-            if planned_action not in {"would_create_captured", "would_create_in_review"}:
+            is_actionable_capture = (
+                planned_action == "would_create_captured"
+                and bool((action.get("actionability") or {}).get("actionable"))
+            )
+            is_review_capture = planned_action == "would_create_in_review"
+            if not (is_actionable_capture or is_review_capture):
                 skipped.append({"url": url, "reason": planned_action})
                 continue
 
-            target_status = "captured" if classification == "verified" else "in_review"
+            target_status = "in_review" if is_review_capture else "captured"
 
             source_obj = _get_or_create_real_source(source_name, url)
 
@@ -1003,7 +1656,7 @@ def _apply_action_plan_to_db(
                 title=_truncate_for_field(CapturedProperty, "title", title, "Captación V2.6.1"),
                 description_raw=f"SOOI V2.6.1 · {source_name} · {action.get('reason') or ''}",
                 province=_truncate_for_field(CapturedProperty, "province", getattr(profile, "province", "") or ctx.get("province", "")),
-                municipality=_truncate_for_field(CapturedProperty, "municipality", location),
+                municipality=_truncate_for_field(CapturedProperty, "municipality", action.get("municipality") or ""),
                 zone_text=_truncate_for_field(CapturedProperty, "zone_text", getattr(profile, "zone", "") or location),
                 property_type=_profile_property_type(profile),
                 price=_decimal_or_none(action.get("price")),
@@ -1027,9 +1680,12 @@ def _apply_action_plan_to_db(
                 last_seen_at=now,
             )
             created_ids.append(obj.id)
+            if is_review_capture:
+                created_review_ids.append(obj.id)
 
     return {
         "created": len(created_ids),
+        "created_in_review": len(created_review_ids),
         "updated": len(updated_ids),
         "skipped": len(skipped),
         "created_ids": created_ids,
@@ -1120,7 +1776,14 @@ def _looks_like_listing_url_v261(source: str, url: str) -> bool:
         return "/inmueble-" not in u
 
     if source == "pisos.com":
-        if "/alquilar/" in u and re.search(r"-\d+_\d+/?$", u):
+        path = urlparse(u).path.lower()
+        if ("/alquilar/" in path or "/comprar/" in path) and re.search(r"-\d+_\d+/?$", path):
+            return False
+        return True
+
+    if source == "terrenos.es":
+        path = urlparse(u).path.lower()
+        if re.search(r"/(?:urbano|rustico|rústico|solar|terreno|casa|vivienda)/\d+/?$", path):
             return False
         return True
 
@@ -1128,20 +1791,16 @@ def _looks_like_listing_url_v261(source: str, url: str) -> bool:
     listing_markers = [
         "/buscar/",
         "/search",
-        "?",
     ]
     return any(marker in u for marker in listing_markers)
 
 
 def _ai_strict_discard_reason_v261(source_row: dict[str, Any], item: dict[str, Any], ctx: dict[str, Any]) -> str:
     """
-    Quality gate estricto para candidatos generados por IA/Web Search.
-    Un candidato IA solo puede quedar reviewable si:
-    - es ficha individual, no listado,
-    - tiene probe disponible,
-    - no devuelve 403/404/error,
-    - tiene precio,
-    - no viola precio/zona.
+    Return only unusable discovery artifacts and known hard mismatches.
+
+    Missing hard-constrained values fail closed. An inconclusive availability
+    probe alone remains reviewable because it does not contradict listing data.
     """
     source = str(source_row.get("source") or "").lower()
     url = str(item.get("url") or "").strip()
@@ -1153,51 +1812,20 @@ def _ai_strict_discard_reason_v261(source_row: dict[str, Any], item: dict[str, A
     if _looks_like_listing_url_v261(source, url):
         return "ai_listing_url_not_individual_detail"
 
-    status = probe.get("http_status")
-    error = probe.get("error")
-    available = probe.get("available")
-
-    # Idealista bloquea probes HTTP con 403 por anti-bot — no indica que el inmueble
-    # no exista. Mismo tratamiento que services.py:600: ignorar el 403 de idealista.
-    is_idealista_403 = "idealista" in source and (
-        (error is not None and "403" in str(error))
-        or (status is not None and str(status) == "403")
-    )
-
-    if error and not is_idealista_403:
-        return f"ai_probe_error:{error}"
-
-    try:
-        if status is not None and int(status) >= 400 and not is_idealista_403:
-            return f"ai_probe_http_{status}"
-    except Exception:
-        pass
-
-    if available is False and not is_idealista_403:
-        unavailable_reason = probe.get("unavailable_reason") or "not_available"
-        return f"ai_probe_unavailable:{unavailable_reason}"
-
-    if available is None and not is_idealista_403:
-        return "ai_probe_missing_or_inconclusive"
-
-    if item.get("price") in (None, "", "null"):
-        return "ai_missing_price"
-
+    # Report exact hard mismatches even when the availability probe is noisy.
     violations = _candidate_constraint_violations(ctx, item)
     if violations:
         return ";".join(violations)
 
-    if ctx.get("location_scope") == "municipality":
-        wanted = _norm_place_text(ctx.get("location"))
-        haystack = _norm_place_text(
-            " ".join([
-                str(item.get("title") or ""),
-                str(item.get("location") or ""),
-                str(item.get("url") or ""),
-            ])
-        )
-        if wanted and wanted not in haystack:
-            return f"ai_location_mismatch:{ctx.get('location')}"
+    unknowns = _candidate_constraint_unknowns(ctx, item)
+    if unknowns:
+        return ";".join(unknowns)
+
+    availability_state, availability_reason = _classify_probe_outcome(probe)
+    if availability_state == "MISMATCH":
+        if probe.get("unavailable_reason"):
+            return f"ai_probe_unavailable:{probe.get('unavailable_reason')}"
+        return availability_reason
 
     return ""
 
@@ -1220,9 +1848,12 @@ def _postprocess_strict_quality_gate_v261(source_coverage: list[dict[str, Any]],
                 item["reason"] = reason
                 continue
 
-            # Si pasa todo, IA queda como reviewable, nunca verified.
+            # AI candidates remain reviewable. UNKNOWN reasons are retained for auditability.
+            availability_state, availability_reason = _classify_probe_outcome(item.get("probe") or {})
+            unknowns = _candidate_constraint_unknowns(ctx, item)
             item["classification"] = "reviewable"
-            item["reason"] = "ai_candidate_passed_strict_review_gate"
+            reasons = unknowns + ([availability_reason] if availability_state == "UNKNOWN" else [])
+            item["reason"] = ";".join(reasons) if reasons else "ai_candidate_passed_strict_review_gate"
 
         source_row["candidate_count"] = len(candidates)
         source_row["verified"] = sum(1 for c in candidates if c.get("classification") == "verified")
@@ -1285,6 +1916,28 @@ def _apply_auto_location(profile: Any, ctx: dict[str, Any]) -> dict[str, Any]:
     - zone vacío => location = province
     """
     province = _plain_place_text(getattr(profile, "province", None) or ctx.get("province"))
+    scope = getattr(profile, "geography_scope", "") or ""
+    if scope:
+        from .geography_runtime import (
+            geography_runtime_enabled, resolve_profile_geography, runtime_search_locations,
+        )
+        locations = runtime_search_locations(profile)
+        if geography_runtime_enabled():
+            geography = resolve_profile_geography(profile)
+            ctx["geography_runtime"] = geography.to_snapshot()
+            ctx["intent_resolutions"] = ctx["geography_runtime"]["intent_resolutions"]
+            ctx["bounded_geography"] = ctx["geography_runtime"]["coverage_units"]
+        scope_map = {"multi_municipality": "multi_location", "named_area": "comarca"}
+        ctx["location_scope"] = scope_map.get(scope, scope)
+        ctx["location"] = (
+            getattr(getattr(profile, "geographic_area", None), "name", "")
+            if scope == "named_area" else (locations[0] if len(locations) == 1 else province)
+        ) or province
+        ctx["search_locations"] = locations
+        ctx["search_locations_count"] = len(locations)
+        ctx["location_source"] = "profile.canonical_geography"
+        ctx["search_locations_source"] = "profile.canonical_geography"
+        return ctx
     zone = _plain_place_text(getattr(profile, "zone", None))
 
     if zone and not _is_province_scope_zone(zone, province):
@@ -1372,6 +2025,8 @@ def _province_search_locations_v261(ctx: dict[str, Any]) -> list[str]:
 
 
 def _apply_search_locations_v261(ctx: dict[str, Any]) -> dict[str, Any]:
+    if ctx.get("search_locations_source") == "profile.canonical_geography" and ctx.get("location_scope") != "province":
+        return ctx
     locations = []
 
     if ctx.get("location_scope") == "province":
@@ -1387,30 +2042,108 @@ def _apply_search_locations_v261(ctx: dict[str, Any]) -> dict[str, Any]:
     return ctx
 
 
+def _provider_execution_locations(ctx: dict[str, Any]) -> list[str]:
+    """Place an exact province-name location first without changing scope."""
+    locations = list(ctx.get("search_locations") or [])
+    province = _norm_place_text(ctx.get("province") or "")
+    if not province:
+        return locations
+    anchor = next((location for location in locations if _norm_place_text(location) == province), None)
+    if anchor is None:
+        return locations
+    return [anchor] + [location for location in locations if location != anchor]
+
+
 def _deterministic_candidates_expanded_v2615(
     spec: SourceSpec,
     ctx: dict[str, Any],
     timeout: int,
     max_locations: int = 18,
+    provenance: list[dict[str, Any]] | None = None,
+    request_trace: list[dict[str, Any]] | None = None,
+    stop_after_candidates: int | None = None,
+    request_governance: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """
     V2.6.1.6:
     En scope provincial, evita que el primer municipio monopolice los resultados.
     Reparte candidatos por municipio con round-robin y deja que el quality gate decida.
     """
-    locations = list(ctx.get("search_locations") or [])
-    if ctx.get("location_scope") != "province" or not locations:
-        return _deterministic_candidates(spec, ctx, timeout=timeout)
+    locations = _provider_execution_locations(ctx)
+    if request_governance is not None:
+        state = _provider_governance_state(request_governance, spec.slug)
+        state["provider_execution_location_order"] = list(locations)
+        province = _norm_place_text(ctx.get("province") or "")
+        state["provider_anchor_location"] = next(
+            (location for location in locations if _norm_place_text(location) == province), None
+        )
+    if ctx.get("location_scope") not in {"province", "multi_location", "comarca"} or not locations:
+        provider = spec.slug
+        if request_governance is not None and not _governance_can_request(request_governance, provider):
+            state = _provider_governance_state(request_governance, provider)
+            if state["circuit_breaker_open"]:
+                state["provider_requests_skipped_circuit_breaker"] += 1
+            else:
+                state["provider_requests_skipped_cap"] += 1
+            return [], "provider_request_governance_skipped"
+        if request_governance is not None:
+            _provider_governance_state(request_governance, provider)["provider_requests_attempted"] += 1
+        trace_start = len(request_trace or [])
+        items, error = _deterministic_candidates(
+            spec, ctx, timeout=timeout, provenance=provenance, request_trace=request_trace,
+        )
+        if request_governance is not None:
+            telemetry = (request_trace or [])[trace_start:] if request_trace is not None else []
+            observed = telemetry[-1] if telemetry else {
+                "zero_reason": "HTTP_NON_SUCCESS" if error else ("NONZERO" if items else "AMBIGUOUS"),
+            }
+            _governance_record(request_governance, provider, str(ctx.get("location") or "unknown"), observed)
+            state = _provider_governance_state(request_governance, provider)
+            if state.get("provider_anchor_location") == str(ctx.get("location") or ""):
+                state["provider_anchor_attempted"] = True
+                state["provider_anchor_result_class"] = state["records"][-1].get("zero_class")
+        return items, error
 
     buckets: list[tuple[str, list[dict[str, Any]]]] = []
     errors: list[str] = []
 
     for loc in locations[:max_locations]:
+        if request_governance is not None and not _governance_can_request(request_governance, spec.slug):
+            state = _provider_governance_state(request_governance, spec.slug)
+            if state["circuit_breaker_open"]:
+                state["provider_requests_skipped_circuit_breaker"] += 1
+            else:
+                state["provider_requests_skipped_cap"] += 1
+            if request_trace is not None:
+                request_trace.append({
+                    "provider": spec.slug, "geography": loc,
+                    "zero_reason": "CIRCUIT_BREAKER_OPEN",
+                    "zero_class": "TECHNICAL",
+                    "skipped_due_circuit_breaker": True,
+                })
+            continue
+        if request_governance is not None:
+            _provider_governance_state(request_governance, spec.slug)["provider_requests_attempted"] += 1
+        trace_start = len(request_trace or [])
         cctx = dict(ctx)
         cctx["location"] = loc
         cctx["location_scope"] = "municipality_probe_from_province"
 
-        items, err = _deterministic_candidates(spec, cctx, timeout=timeout)
+        items, err = _deterministic_candidates(
+            spec, cctx, timeout=timeout, provenance=provenance,
+            request_trace=request_trace,
+        )
+
+        if request_governance is not None:
+            telemetry = (request_trace or [])[trace_start:] if request_trace is not None else []
+            observed = telemetry[-1] if telemetry else {
+                "zero_reason": "HTTP_NON_SUCCESS" if err else ("NONZERO" if items else "AMBIGUOUS"),
+            }
+            _governance_record(request_governance, spec.slug, loc, observed)
+            state = _provider_governance_state(request_governance, spec.slug)
+            if state.get("provider_anchor_location") == loc:
+                state["provider_anchor_attempted"] = True
+                state["provider_anchor_result_class"] = state["records"][-1].get("zero_class")
 
         if err:
             errors.append(f"{loc}:{err}")
@@ -1419,13 +2152,15 @@ def _deterministic_candidates_expanded_v2615(
         for item in items:
             item = dict(item)
             item["search_location"] = loc
-            if not item.get("location"):
-                item["location"] = loc
             clean_items.append(item)
 
         clean_items = _dedupe_candidates(clean_items)
         if clean_items:
             buckets.append((loc, clean_items))
+        if stop_after_candidates and len(_dedupe_candidates([
+            item for _location, bucket in buckets for item in bucket
+        ])) >= stop_after_candidates:
+            break
 
     if not buckets:
         return [], "; ".join(errors[:8]) if errors else None
@@ -1443,6 +2178,234 @@ def _deterministic_candidates_expanded_v2615(
         return deduped, None
 
     return [], "; ".join(errors[:8]) if errors else None
+
+
+def _ai_candidates_expanded(
+    spec: SourceSpec, ctx: dict[str, Any], max_results: int, max_locations: int = 4,
+    circuit: ProviderCircuit | None = None, before_call=None, after_call=None,
+    stage_trace: dict[str, Any] | None = None, batch_trace: list[dict[str, Any]] | None = None,
+    provenance: list[dict[str, Any]] | None = None,
+    consolidate_locations: bool = False,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Cover every municipality in at most ``max_locations`` AI calls per source."""
+    circuit = circuit or ProviderCircuit("openai")
+
+    def governed_call(prompt: str) -> ProviderResult[str]:
+        if circuit.state is ProviderCircuitState.OPEN:
+            return ProviderResult(
+                ProviderOutcome.SKIPPED_CIRCUIT,
+                reason=circuit.reason or "provider_circuit_open",
+            )
+        # Tuple support keeps older focused tests and local call-site mocks valid.
+        if before_call is not None and not before_call():
+            return ProviderResult(ProviderOutcome.SKIPPED_CIRCUIT, reason="planner_limit")
+        token = _OPENAI_CIRCUIT_CONTEXT.set(circuit)
+        try:
+            before_provenance = len(provenance) if provenance is not None else 0
+            if provenance is None:
+                # Preserve the historical call shape for focused mocks and
+                # non-coverage callers that did not request provenance.
+                result = _call_openai_web_search(prompt)
+            else:
+                result = _call_openai_web_search(
+                    prompt, provenance=provenance, source_provider=spec.slug,
+                )
+            if provenance is not None:
+                for item in provenance[before_provenance:]:
+                    item["planned"] = {
+                        **item.get("planned", {}),
+                        "provider": spec.slug,
+                        "operation": _canonical_operation(ctx.get("operation")),
+                        "geography": str(ctx.get("location") or ctx.get("province") or "unknown"),
+                    }
+        finally:
+            _OPENAI_CIRCUIT_CONTEXT.reset(token)
+        if isinstance(result, tuple):
+            text, error = result
+            result = ProviderResult(
+                ProviderOutcome.RETRYABLE_FAILURE if error else ProviderOutcome.SUCCESS,
+                value=text,
+                reason=error,
+            )
+        if result.outcome is ProviderOutcome.HARD_FAILURE and circuit.state.value != "OPEN":
+            circuit.open(result.reason or "provider_hard_failure")
+        if after_call is not None:
+            after_call(result.outcome is ProviderOutcome.SUCCESS)
+        return result
+
+    locations = list(ctx.get("search_locations") or [])
+    if ctx.get("location_scope") not in {"multi_location", "comarca"} or len(locations) < 2:
+        prompt = _openai_prompt(spec, ctx, max_results=max_results)
+        result = governed_call(prompt)
+        before_format = int((stage_trace or {}).get("format_noncompliance_count", 0))
+        items = _items_from_ai_text(result.value or "", spec, stage_trace)[:max_results]
+        if batch_trace is not None:
+            batch_trace.append({
+                "locations": locations or [ctx.get("location")], "outcome": result.outcome.value,
+                "format_conclusive": int((stage_trace or {}).get("format_noncompliance_count", 0)) == before_format,
+            })
+        return items, result.reason
+
+    merged, errors = [], []
+    call_count = 1 if consolidate_locations else min(len(locations), max_locations)
+    from .adaptive_planner import location_batches
+    batches = location_batches(locations, call_count)
+
+    per_batch = max(1, (max_results + call_count - 1) // call_count)
+    for batch in batches:
+        child = dict(ctx)
+        child.update(
+            location=batch[0],
+            location_scope="municipality_probe_batch",
+            search_locations=batch,
+        )
+        result = governed_call(
+            _openai_prompt(spec, child, max_results=per_batch)
+        )
+        before_format = int((stage_trace or {}).get("format_noncompliance_count", 0))
+        items = _items_from_ai_text(result.value or "", spec, stage_trace)
+        if batch_trace is not None:
+            batch_trace.append({
+                "locations": list(batch), "outcome": result.outcome.value,
+                "format_conclusive": int((stage_trace or {}).get("format_noncompliance_count", 0)) == before_format,
+            })
+        if result.reason:
+            errors.append(f"{', '.join(batch)}:{result.reason}")
+        for item in items:
+            item.setdefault("search_location", batch[0])
+            item.setdefault("search_location_batch", list(batch))
+            merged.append(item)
+        if result.outcome in (ProviderOutcome.HARD_FAILURE, ProviderOutcome.SKIPPED_CIRCUIT):
+            break
+    return _dedupe_candidates(merged)[:max_results], "; ".join(errors[:4]) or None
+
+
+def _is_pre_provider_gate_reason(reason: Any) -> bool:
+    """Recognize planner decisions that happen before a provider invocation."""
+    normalized = str(reason or "").lower().replace("-", "_")
+    return any(marker in normalized for marker in (
+        "planner_limit", "budget_exhaust", "budget_gate", "pre_provider",
+        "controlled_omission", "mode_limit", "plan_limit",
+    ))
+
+
+def _refresh_safe_stage_counters(row: dict[str, Any]) -> None:
+    """Project aggregate diagnostics only; candidate/provider bodies are excluded."""
+    counters = row.setdefault("stage_counters", {})
+    candidates = row.get("candidates") or []
+    counters["normalized_or_deduped_candidate_count"] = int(row.get("candidate_count") or 0)
+    counters["accepted_candidate_count"] = sum(
+        1 for item in candidates
+        if item.get("classification") in {"verified", "reviewable"}
+    )
+    reasons = [str(item.get("reason") or "") for item in candidates if item.get("classification") == "discarded"]
+    counters["rejected_geography_count"] = sum("location_outside_search_scope" in reason for reason in reasons)
+    counters["rejected_price_count"] = sum(
+        any(marker in reason for marker in ("price_above_max", "price_below_min", "price_implausible"))
+        for reason in reasons
+    )
+    counters["rejected_bedroom_count"] = sum("bedrooms_below_min" in reason for reason in reasons)
+    counters["rejected_property_type_count"] = sum("property_type_mismatch" in reason for reason in reasons)
+    counters["rejected_missing_evidence_count"] = sum(
+        any(marker in reason for marker in ("ai_missing_url", "unknown_required_attribute:"))
+        for reason in reasons
+    )
+    counters["format_noncompliance_count"] = int(counters.get("format_noncompliance_count") or 0)
+    if not counters.get("provider_response_present"):
+        counters["zero_stage"] = "provider_response_zero"
+    elif int(counters.get("extracted_candidate_count") or 0) == 0:
+        counters["zero_stage"] = (
+            "format_noncompliance" if counters["format_noncompliance_count"]
+            else "extraction_zero"
+        )
+    elif counters["normalized_or_deduped_candidate_count"] == 0:
+        counters["zero_stage"] = "normalization_zero"
+    elif counters["accepted_candidate_count"] == 0:
+        counters["zero_stage"] = "hard_filter_rejection"
+    else:
+        counters["zero_stage"] = "accepted"
+
+
+def _refresh_provider_efficiency(row: dict[str, Any], ctx: dict[str, Any]) -> None:
+    """Derive source metrics from final semantics; never influence decisions."""
+    from .search_quality_semantics import result_actionability
+
+    candidates = row.get("candidates") or []
+    semantics = [
+        result_actionability(
+            candidate,
+            hard_violations=_candidate_constraint_violations(ctx, candidate),
+        )
+        for candidate in candidates
+    ]
+    candidate_count = len(candidates)
+    hard_clean = sum(bool(item["hard_clean"]) for item in semantics)
+    actionable = sum(bool(item["actionable"]) for item in semantics)
+    review_required = sum(bool(item["review_required"]) for item in semantics)
+    availability_states = [str(item.get("availability_state") or "").lower() for item in semantics]
+    availability_confirmed = sum(state == "confirmed" for state in availability_states)
+    availability_unknown = sum(state == "unknown" for state in availability_states)
+    availability_unavailable = sum(state == "unavailable" for state in availability_states)
+    review_availability = sum(
+        state == "unknown" and bool(item["hard_clean"])
+        for state, item in zip(availability_states, semantics)
+    )
+    row["provider_efficiency"] = {
+        "candidate_count": candidate_count,
+        "hard_clean_count": hard_clean,
+        "actionable_count": actionable,
+        "review_required_count": review_required,
+        "hard_rejected_count": candidate_count - hard_clean,
+        "availability_confirmed_count": availability_confirmed,
+        "availability_unknown_count": availability_unknown,
+        "availability_unavailable_count": availability_unavailable,
+        "review_availability_count": review_availability,
+        "provider_yield_pct": round(hard_clean * 100 / candidate_count, 2) if candidate_count else 0,
+        "commercial_yield_pct": round(actionable * 100 / candidate_count, 2) if candidate_count else 0,
+    }
+
+
+def _aggregate_safe_stage_counters(source_coverage: list[dict[str, Any]]) -> dict[str, Any]:
+    # These counters describe the AI provider candidate flow only. Mixing in
+    # deterministic/reused rows would make provider and extraction stages
+    # incomparable and could produce normalized > extracted telemetry.
+    rows = [
+        row.get("stage_counters") or {} for row in source_coverage
+        if row.get("attempted") and row.get("method") == "openai_web_search"
+    ]
+    inferable = bool(rows) and all(
+        row.get("provider_raw_item_count") != "UNKNOWN" for row in rows
+    )
+    aggregate = {
+        "provider_response_present": any(bool(row.get("provider_response_present")) for row in rows),
+        "provider_raw_item_count": (
+            sum(int(row.get("provider_raw_item_count") or 0) for row in rows) if inferable else "UNKNOWN"
+        ),
+        **{
+            key: sum(int(row.get(key) or 0) for row in rows)
+            for key in (
+                "extracted_candidate_count", "normalized_or_deduped_candidate_count",
+                "accepted_candidate_count", "rejected_geography_count", "rejected_price_count",
+                "rejected_bedroom_count", "rejected_property_type_count",
+                "rejected_missing_evidence_count",
+                "format_noncompliance_count",
+            )
+        },
+    }
+    if not aggregate["provider_response_present"]:
+        aggregate["zero_stage"] = "provider_response_zero"
+    elif aggregate["extracted_candidate_count"] == 0:
+        aggregate["zero_stage"] = (
+            "format_noncompliance" if aggregate["format_noncompliance_count"]
+            else "extraction_zero"
+        )
+    elif aggregate["normalized_or_deduped_candidate_count"] == 0:
+        aggregate["zero_stage"] = "normalization_zero"
+    elif aggregate["accepted_candidate_count"] == 0:
+        aggregate["zero_stage"] = "hard_filter_rejection"
+    else:
+        aggregate["zero_stage"] = "accepted"
+    return aggregate
 
 
 def _postprocess_low_price_review_v2617(source_coverage: list[dict[str, Any]], ctx: dict[str, Any]) -> None:
@@ -1477,6 +2440,409 @@ def _postprocess_low_price_review_v2617(source_coverage: list[dict[str, Any]], c
                 item["classification"] = "reviewable"
                 item["reason"] = f"low_price_requires_review:{price:g}<{min_reasonable_rent:g}"
 
+
+# SR0_SEARCH_RECOVERY_V1
+# Recuperación comercial del buscador:
+# - listas explícitas de ubicaciones no son un único municipio;
+# - Los Pedroches se trata como ámbito comarcal;
+# - 403 anti-bot de fuentes conocidas es inconcluso, no anuncio inexistente;
+# - Fotocasa HTTP 200 + marcador genérico "no está disponible" pasa a revisión
+#   si respeta los filtros, en vez de descartarse automáticamente.
+
+_SR0_LOS_PEDROCHES = [
+    "Pozoblanco",
+    "Alcaracejos",
+    "Añora",
+    "Belalcázar",
+    "Cardeña",
+    "Conquista",
+    "Dos Torres",
+    "El Guijo",
+    "El Viso",
+    "Fuente La Lancha",
+    "Hinojosa del Duque",
+    "Pedroche",
+    "Santa Eufemia",
+    "Torrecampo",
+    "Villanueva de Córdoba",
+    "Villanueva del Duque",
+    "Villaralto",
+]
+
+
+def _sr0_split_explicit_locations(value: Any) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw or "," not in raw:
+        return []
+    seen = set()
+    result = []
+    for part in raw.split(","):
+        item = re.sub(r"\s+", " ", part).strip(" ,;")
+        key = _ascii_slug(item)
+        if item and key and key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result if len(result) > 1 else []
+
+
+def _sr0_repair_search_locations(ctx: dict[str, Any]) -> None:
+    if ctx.get("search_locations_source") == "profile.canonical_geography":
+        return
+    raw_location = str(ctx.get("location") or "").strip()
+    norm = _ascii_slug(raw_location, sep=" ")
+
+    if norm in {"los pedroches", "valle de los pedroches"}:
+        ctx["location_scope"] = "comarca"
+        ctx["search_locations"] = list(_SR0_LOS_PEDROCHES)
+        ctx["search_locations_count"] = len(_SR0_LOS_PEDROCHES)
+        ctx["search_locations_source"] = "sr0_los_pedroches_comarca_v1"
+        return
+
+    explicit = _sr0_split_explicit_locations(raw_location)
+    if explicit:
+        ctx["location_scope"] = "multi_location"
+        ctx["search_locations"] = explicit
+        ctx["search_locations_count"] = len(explicit)
+        ctx["search_locations_source"] = "sr0_explicit_multi_location_v1"
+
+
+def _sr0_is_known_antibot_403(source: str, probe: dict[str, Any]) -> bool:
+    source = str(source or "").lower()
+    if source not in {"idealista", "yaencontre", "terrenos.es"}:
+        return False
+    status = probe.get("http_status")
+    error = str(probe.get("error") or "")
+    return str(status) == "403" or "403" in error
+
+
+def _sr0_postprocess_fotocasa_inconclusive(
+    source_coverage: list[dict[str, Any]],
+    ctx: dict[str, Any],
+) -> None:
+    # Fotocasa puede devolver HTTP 200 y contener el texto genérico
+    # "no está disponible" en HTML. SR0 no lo eleva a verified:
+    # queda reviewable si respeta los filtros.
+    for row in source_coverage:
+        if str(row.get("source") or "").lower() != "fotocasa":
+            continue
+
+        for item in row.get("candidates") or []:
+            if item.get("classification") != "discarded":
+                continue
+
+            probe = item.get("probe") or {}
+            reason = str(item.get("reason") or probe.get("unavailable_reason") or "").lower()
+
+            if str(probe.get("http_status")) != "200":
+                continue
+            if "no está disponible" not in reason and "no esta disponible" not in reason:
+                continue
+
+            violations = _candidate_constraint_violations(ctx, item)
+            if violations:
+                item["classification"] = "discarded"
+                item["reason"] = ";".join(violations)
+            else:
+                item["classification"] = "reviewable"
+                item["reason"] = "sr0_fotocasa_http200_availability_inconclusive"
+
+        candidates = row.get("candidates") or []
+        row["verified"] = sum(1 for c in candidates if c.get("classification") == "verified")
+        row["reviewable"] = sum(1 for c in candidates if c.get("classification") == "reviewable")
+        row["discarded"] = sum(1 for c in candidates if c.get("classification") == "discarded")
+
+
+_MAX_NEAR_MATCHES_TOTAL = 12
+_NEAR_MATCH_PROVIDERS_V1 = frozenset({"fotocasa", "habitaclia"})
+_DETERMINISTIC_REQUEST_CAP_PER_PROVIDER = 6
+_DETERMINISTIC_TECHNICAL_FAILURE_THRESHOLD = 2
+
+
+def _new_deterministic_request_governance() -> dict[str, Any]:
+    return {
+        "provider_request_cap": _DETERMINISTIC_REQUEST_CAP_PER_PROVIDER,
+        "technical_failure_threshold": _DETERMINISTIC_TECHNICAL_FAILURE_THRESHOLD,
+        "providers": {},
+    }
+
+
+def _provider_governance_state(governance: dict[str, Any], provider: str) -> dict[str, Any]:
+    return governance.setdefault("providers", {}).setdefault(provider, {
+        "provider_requests_attempted": 0,
+        "provider_requests_succeeded": 0,
+        "provider_requests_technical_failed": 0,
+        "provider_requests_business_zero": 0,
+        "provider_requests_ambiguous": 0,
+        "provider_requests_skipped_circuit_breaker": 0,
+        "provider_requests_skipped_cap": 0,
+        "consecutive_technical_failures": 0,
+        "circuit_breaker_open": False,
+        "circuit_breaker_reason": "",
+        "circuit_breaker_eligible_failure_count": 0,
+        "provider_execution_location_order": [],
+        "provider_anchor_location": None,
+        "provider_anchor_attempted": False,
+        "provider_anchor_result_class": None,
+        "records": [],
+    })
+
+
+def _governance_zero_class(telemetry: dict[str, Any]) -> str:
+    existing = str(telemetry.get("zero_class") or "").upper()
+    if existing in {"NONZERO", "BUSINESS", "AMBIGUOUS", "TECHNICAL"}:
+        return existing
+    reason = str(telemetry.get("zero_reason") or "").upper()
+    if reason == "NONZERO":
+        return "NONZERO"
+    if reason == "PROVIDER_EMPTY_CONFIRMED":
+        return "BUSINESS"
+    if reason == "SCOPE_FOUND_NO_ANCHORS":
+        return "AMBIGUOUS"
+    if reason in {"RESULT_SCOPE_NOT_FOUND", "HTTP_NON_SUCCESS", "UNEXPECTED_REDIRECT"}:
+        return "TECHNICAL"
+    return "TECHNICAL" if reason else "AMBIGUOUS"
+
+
+def _governance_can_request(governance: dict[str, Any], provider: str) -> bool:
+    state = _provider_governance_state(governance, provider)
+    if state["circuit_breaker_open"]:
+        return False
+    return state["provider_requests_attempted"] < int(
+        governance.get("provider_request_cap") or _DETERMINISTIC_REQUEST_CAP_PER_PROVIDER
+    )
+
+
+def _governance_record(
+    governance: dict[str, Any], provider: str, geography: str, telemetry: dict[str, Any],
+) -> None:
+    state = _provider_governance_state(governance, provider)
+    zero_class = _governance_zero_class(telemetry)
+    state["records"].append({"geography": geography, **telemetry, "zero_class": zero_class})
+    if zero_class == "NONZERO":
+        state["provider_requests_succeeded"] += 1
+        state["consecutive_technical_failures"] = 0
+    elif zero_class == "BUSINESS":
+        state["provider_requests_succeeded"] += 1
+        state["provider_requests_business_zero"] += 1
+        state["consecutive_technical_failures"] = 0
+    elif zero_class == "AMBIGUOUS":
+        state["provider_requests_ambiguous"] += 1
+        state["consecutive_technical_failures"] = 0
+    else:
+        state["provider_requests_technical_failed"] += 1
+        state["circuit_breaker_eligible_failure_count"] += 1
+        state["consecutive_technical_failures"] += 1
+        if state["consecutive_technical_failures"] >= int(
+            governance.get("technical_failure_threshold") or _DETERMINISTIC_TECHNICAL_FAILURE_THRESHOLD
+        ):
+            state["circuit_breaker_open"] = True
+            state["circuit_breaker_reason"] = "consecutive_technical_failures"
+
+
+def _governance_eligible_locations(governance: dict[str, Any], provider: str) -> list[str]:
+    state = _provider_governance_state(governance, provider)
+    return [
+        str(record["geography"])
+        for record in state.get("records", [])
+        if record.get("zero_class") == "BUSINESS"
+    ]
+
+
+def _recovery_constraints(ctx: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "min_price": str(ctx.get("min_price")) if ctx.get("min_price") not in (None, "") else None,
+        "max_price": str(ctx.get("max_price")) if ctx.get("max_price") not in (None, "") else None,
+        "min_bedrooms": ctx.get("bedrooms"),
+        "property_types": list(ctx.get("property_types") or []),
+        "locations": list(ctx.get("search_locations") or []),
+    }
+
+
+def _deterministic_exact_candidate_count(
+    source_coverage: list[dict[str, Any]], ctx: dict[str, Any],
+) -> int:
+    return sum(
+        1 for row in source_coverage
+        if row.get("method") == "deterministic"
+        for candidate in (row.get("candidates") or [])
+        if not _candidate_constraint_violations(ctx, candidate)
+        and candidate.get("classification") in {"verified", "reviewable"}
+    )
+
+
+def _near_match_allowed(
+    tier: str, original_ctx: dict[str, Any], effective_ctx: dict[str, Any], candidate: dict[str, Any],
+) -> bool:
+    """Allow exactly the single advertised relaxation; fail closed otherwise."""
+    original = _candidate_constraint_violations(original_ctx, candidate)
+    if _candidate_constraint_unknowns(original_ctx, candidate):
+        return False
+    if _candidate_constraint_violations(effective_ctx, candidate):
+        return False
+    availability_state = str((candidate.get("availability_evidence") or {}).get("state") or "").lower()
+    if availability_state not in {"confirmed", "unknown"}:
+        return False
+    if tier == "BUDGET_PLUS_10_PERCENT":
+        return len(original) == 1 and original[0].startswith("price_above_max:")
+    if tier == "BEDROOM_MINUS_ONE":
+        return len(original) == 1 and original[0].startswith("bedrooms_below_min:")
+    return False
+
+
+def _run_zero_result_recovery(
+    specs: list[SourceSpec], source_coverage: list[dict[str, Any]], ctx: dict[str, Any],
+    timeout: int, max_results_per_source: int, detail_probe_cache: dict[str, dict[str, Any]],
+    request_governance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run two bounded deterministic-only tiers and keep alternatives out of exact buckets."""
+    specs = [spec for spec in specs if spec.slug in _NEAR_MATCH_PROVIDERS_V1]
+    result: dict[str, Any] = {
+        "deterministic_exact_zero": True,
+        "fallback_executed": bool(specs),
+        "fallback_stop_reason": "no_near_matches" if specs else "unsupported_deterministic_provider",
+        "near_match_tier_used": None,
+        "near_match_candidates": [],
+        "exact_candidates_recovered": [],
+        "fallback_trace": [],
+        "fallback_skipped_technical_zero_count": 0,
+    }
+    if not specs:
+        return result
+    if request_governance is not None and not any(
+        _governance_eligible_locations(request_governance, spec.slug) for spec in specs
+    ):
+        result["fallback_executed"] = False
+        result["fallback_stop_reason"] = "technical_zero_not_fallback_eligible"
+        return result
+    row_by_source = {row.get("source"): row for row in source_coverage}
+    original_constraints = _recovery_constraints(ctx)
+    tiers: list[tuple[str, dict[str, Any]]] = []
+    if ctx.get("max_price") not in (None, ""):
+        budget_ctx = dict(ctx)
+        budget_ctx["max_price"] = Decimal(str(ctx["max_price"])) * Decimal("1.10")
+        tiers.append(("BUDGET_PLUS_10_PERCENT", budget_ctx))
+    bedrooms = int(ctx.get("bedrooms") or 0)
+    if bedrooms > 1:
+        bedroom_ctx = dict(ctx)
+        bedroom_ctx["bedrooms"] = max(1, bedrooms - 1)
+        bedroom_ctx["min_bedrooms"] = bedroom_ctx["bedrooms"]
+        tiers.append(("BEDROOM_MINUS_ONE", bedroom_ctx))
+
+    seen = set()
+    for tier, effective_ctx in tiers:
+        tier_near: list[dict[str, Any]] = []
+        tier_exact: list[dict[str, Any]] = []
+        tier_trace = {
+            "tier": tier,
+            "providers_attempted": [],
+            "effective_constraints": _recovery_constraints(effective_ctx),
+            "raw_candidates": 0,
+            "parsed_candidates": 0,
+            "accepted_near_matches": 0,
+            "rejected_reason_counts": {},
+        }
+        for spec in specs:
+            eligible_locations = (
+                _governance_eligible_locations(request_governance, spec.slug)
+                if request_governance is not None else list(effective_ctx.get("search_locations") or [])
+            )
+            if request_governance is not None and not eligible_locations:
+                result["fallback_skipped_technical_zero_count"] += 1
+                counts = tier_trace["rejected_reason_counts"]
+                counts["technical_zero_not_fallback_eligible"] = int(
+                    counts.get("technical_zero_not_fallback_eligible") or 0
+                ) + 1
+                continue
+            remaining = _MAX_NEAR_MATCHES_TOTAL - len(tier_near)
+            if remaining <= 0:
+                break
+            row = row_by_source.get(spec.slug)
+            provenance = row.get("query_provenance") if row else None
+            request_trace = row.get("deterministic_request_telemetry") if row else None
+            provider_ctx = dict(effective_ctx)
+            if request_governance is not None:
+                provider_ctx["search_locations"] = eligible_locations
+                provider_ctx["search_locations_count"] = len(eligible_locations)
+            items, _error = _deterministic_candidates_expanded_v2615(
+                spec, provider_ctx, timeout=timeout,
+                provenance=provenance, request_trace=request_trace,
+                stop_after_candidates=remaining,
+                request_governance=request_governance,
+            )
+            tier_trace["providers_attempted"].append(spec.slug)
+            tier_trace["raw_candidates"] += len(items)
+            tier_trace["parsed_candidates"] += len(items)
+            verdicts = _classify_targeted_detail_candidates(
+                spec, items[:max_results_per_source], effective_ctx, timeout,
+                probe_cache=detail_probe_cache,
+                cap=min(max_results_per_source, remaining),
+            )
+            for verdict in verdicts:
+                key = _normalize_url(verdict.get("url") or "")
+                if not key or key in seen:
+                    continue
+                original_violations = _candidate_constraint_violations(ctx, verdict)
+                if not original_violations and not _candidate_constraint_unknowns(ctx, verdict) \
+                        and verdict.get("classification") == "verified":
+                    exact = dict(verdict)
+                    exact["exact_match"] = True
+                    exact["discovered_during_fallback"] = True
+                    exact["source"] = spec.slug
+                    tier_exact.append(exact)
+                    seen.add(key)
+                    continue
+                if verdict.get("classification") not in {"verified", "reviewable"} or not _near_match_allowed(
+                    tier, ctx, effective_ctx, verdict,
+                ):
+                    reason = str(verdict.get("reason") or "rejected")
+                    counts = tier_trace["rejected_reason_counts"]
+                    counts[reason] = int(counts.get(reason) or 0) + 1
+                    continue
+                near = dict(verdict)
+                near.update({
+                    "provider": spec.slug,
+                    "classification": "near_match",
+                    "exact_match": False,
+                    "match_tier": tier,
+                    "relaxation_reason": original_violations[0],
+                    "original_constraints": original_constraints,
+                    "effective_constraints": _recovery_constraints(effective_ctx),
+                    "alternative_label": (
+                        "Supera el presupuesto máximo hasta un 10 %"
+                        if tier == "BUDGET_PLUS_10_PERCENT"
+                        else "Tiene un dormitorio menos que el mínimo solicitado"
+                    ),
+                })
+                if str((near.get("availability_evidence") or {}).get("state") or "").lower() == "unknown":
+                    near["availability_review"] = True
+                    near["alternative_label"] += " · Disponibilidad por revisar"
+                tier_near.append(near)
+                tier_trace["accepted_near_matches"] += 1
+                seen.add(key)
+                if len(tier_near) >= _MAX_NEAR_MATCHES_TOTAL:
+                    break
+
+        result["fallback_trace"].append(tier_trace)
+        for exact in tier_exact:
+            target = row_by_source.get(exact.get("source"))
+            if target is not None:
+                existing = {_normalize_url(item.get("url") or "") for item in target.get("candidates") or []}
+                if _normalize_url(exact.get("url") or "") not in existing:
+                    target.setdefault("candidates", []).append(exact)
+                    target["candidate_count"] = len(target["candidates"])
+                    target["status"] = "success"
+            result["exact_candidates_recovered"].append(exact)
+        if tier_exact:
+            result["fallback_stop_reason"] = "exact_matches_recovered"
+            break
+        if tier_near:
+            result["near_match_candidates"] = tier_near[:_MAX_NEAR_MATCHES_TOTAL]
+            result["near_match_tier_used"] = tier
+            result["fallback_stop_reason"] = "near_match_cap_reached" if len(tier_near) >= _MAX_NEAR_MATCHES_TOTAL else "near_matches_found"
+            break
+    return result
+
+
 def run_hybrid_discovery_v261(
     profile_id: int,
     write: bool = False,
@@ -1499,10 +2865,73 @@ def run_hybrid_discovery_v261(
         ctx["location_source"] = "command.location_override"
 
     _apply_search_locations_v261(ctx)
+    _sr0_repair_search_locations(ctx)
 
     source_coverage = []
+    detail_probe_cache: dict[str, dict[str, Any]] = {}
+    deterministic_request_governance = _new_deterministic_request_governance()
+    coverage_batch_trace: list[dict[str, Any]] = []
+    reuse_observability: dict[str, Any] = {
+        "reuse_applied": False,
+        "reused_from_run_id": None,
+        "reused_candidate_count": 0,
+        "reused_source_count": 0,
+        "fresh_provider_requests_attempted": 0,
+        "fresh_external_calls_attempted": 0,
+        "provider_request_governance_live_exercised": False,
+        "provider_request_governance_live_state": "NOT_EXERCISED_DUE_TO_REUSE",
+    }
+    recovery_result: dict[str, Any] = {
+        "deterministic_exact_zero": False,
+        "fallback_executed": False,
+        "fallback_stop_reason": "exact_matches_present",
+        "near_match_tier_used": None,
+        "near_match_candidates": [],
+        "exact_candidates_recovered": [],
+    }
+    # One circuit per hybrid execution: shared by every municipality batch and
+    # every source using the same external provider.
+    openai_circuit = ProviderCircuit("openai")
 
-    for spec in SOURCE_SPECS:
+    # Flag-off and ungoverned runs deliberately keep the historical topology.
+    planner = None
+    execution_specs = SOURCE_SPECS
+    if search_run is not None:
+        from .adaptive_planner import planner_for_run
+        planner = planner_for_run(search_run, SOURCE_SPECS)
+        if planner:
+            execution_specs = planner.allowed
+
+            # LOCAL is real persisted evidence. It is evaluated before any
+            # deterministic fetch or provider boundary and keeps its original
+            # classifications/provenance intact.
+            from .search_reuse import reusable_evidence
+            reused_run, reused_rows = reusable_evidence(search_run)
+            source_coverage.extend(reused_rows)
+            if reused_rows:
+                reuse_observability.update({
+                    "reuse_applied": True,
+                    "reused_from_run_id": reused_run.pk if reused_run else None,
+                    "reused_candidate_count": sum(
+                        len(row.get("candidates") or []) for row in reused_rows
+                    ),
+                    "reused_source_count": len({row.get("source") for row in reused_rows if row.get("source")}),
+                })
+                for row in reused_rows:
+                    row["telemetry_origin_run_id"] = reused_run.pk if reused_run else None
+                    provenance = row.get("query_provenance")
+                    if isinstance(provenance, dict):
+                        provenance["telemetry_origin_run_id"] = reused_run.pk if reused_run else None
+                        response = provenance.get("response")
+                        if isinstance(response, dict):
+                            response["telemetry_origin_run_id"] = reused_run.pk if reused_run else None
+                from .adaptive_planner import actionable_sufficient_coverage
+                planner.observe_deterministic_coverage(reused_rows)
+                if actionable_sufficient_coverage(planner.mode, source_coverage, planner.policy):
+                    planner.stop("sufficient_coverage", execution_specs)
+                    execution_specs = []
+
+    for spec_index, spec in enumerate(execution_specs):
         if not _is_applicable(spec, ctx):
             row = _coverage_row(spec, False, "not_applicable", "not_applicable")
             source_coverage.append(row)
@@ -1511,52 +2940,431 @@ def run_hybrid_discovery_v261(
         row = _coverage_row(spec, True, spec.method, "failed")
         raw_candidates: list[dict[str, Any]] = []
         error = None
+        source_result_cap = _external_result_cap(spec, max_results_per_source)
+        row.setdefault("stage_counters", {})["requested_result_cap"] = source_result_cap
+        if spec.slug == "idealista":
+            row["stage_counters"]["query_group_count"] = len(_idealista_query_groups(ctx))
+            row["stage_counters"]["direct_listing_url_rejected"] = 0
 
         if spec.method == "deterministic":
-            raw_candidates, error = _deterministic_candidates_expanded_v2615(spec, ctx, timeout=timeout)
+            raw_candidates, error = _deterministic_candidates_expanded_v2615(
+                spec, ctx, timeout=timeout, provenance=row["query_provenance"],
+                request_trace=row["deterministic_request_telemetry"],
+                request_governance=deterministic_request_governance,
+            )
         else:
             if use_ai:
-                prompt = _openai_prompt(spec, ctx, max_results=max_results_per_source)
-                text, error = _call_openai_web_search(prompt)
-                raw_candidates = _items_from_ai_text(text, spec)[:max_results_per_source]
+                if openai_circuit.state.value == "OPEN":
+                    row["attempted"] = False
+                    row["status"] = "skipped_circuit"
+                    row["provider_outcome"] = ProviderOutcome.SKIPPED_CIRCUIT.value
+                    row["provider_reason"] = openai_circuit.reason
+                    row["error"] = "provider_circuit_open"
+                    source_coverage.append(row)
+                    continue
+                stage_trace: dict[str, Any] = {}
+                raw_candidates, error = _ai_candidates_expanded(
+                    spec, ctx, max_results=source_result_cap,
+                    circuit=openai_circuit,
+                    before_call=planner.before_external_call if planner else None,
+                    after_call=planner.after_external_call if planner else None,
+                    stage_trace=stage_trace,
+                    batch_trace=coverage_batch_trace if planner else None,
+                    provenance=row["query_provenance"],
+                    consolidate_locations=bool(
+                        planner and planner.mode == "eco" and planner.budget_max == Decimal("1")
+                    ),
+                )
+                row["stage_counters"].update({
+                    "provider_response_present": bool(stage_trace.get("provider_response_present")),
+                    "provider_raw_item_count": (
+                        int(stage_trace.get("provider_raw_item_count", 0))
+                        if stage_trace.get("provider_raw_item_count_inferable") else "UNKNOWN"
+                    ),
+                    "extracted_candidate_count": int(stage_trace.get("extracted_candidate_count", 0)),
+                    "format_noncompliance_count": int(stage_trace.get("format_noncompliance_count", 0)),
+                    "missing_title_count": int(stage_trace.get("missing_title_count", 0)),
+                    "direct_listing_url_rejected": int(stage_trace.get("direct_listing_url_rejected", 0)),
+                    "ai_items_returned": int(stage_trace.get("provider_raw_item_count", 0))
+                    if stage_trace.get("provider_raw_item_count_inferable") else "UNKNOWN",
+                })
+                if openai_circuit.state.value == "OPEN":
+                    row["provider_outcome"] = ProviderOutcome.HARD_FAILURE.value
+                    row["provider_reason"] = openai_circuit.reason
+                elif error and _is_pre_provider_gate_reason(error):
+                    row["attempted"] = False
+                    row["provider_outcome"] = ProviderOutcome.SKIPPED_CIRCUIT.value
+                    row["provider_reason"] = error
+                elif error:
+                    row["provider_outcome"] = ProviderOutcome.RETRYABLE_FAILURE.value
+                    row["provider_reason"] = error
+                else:
+                    row["provider_outcome"] = ProviderOutcome.SUCCESS.value
             else:
                 error = "ai_disabled_by_option"
 
-        raw_candidates = _dedupe_candidates(raw_candidates)[:max_results_per_source]
+        pre_dedupe_count = len(raw_candidates)
+        raw_candidates = _dedupe_candidates(raw_candidates)
+        row["stage_counters"]["duplicates_removed"] = max(0, pre_dedupe_count - len(raw_candidates))
+        row["stage_counters"]["parsed_candidates"] = len(raw_candidates)
+        if spec.slug == "idealista":
+            row["stage_counters"]["direct_listing_url_accepted"] = len(raw_candidates)
+            row["stage_counters"]["direct_listing_url_rejected"] = int(
+                row["stage_counters"].get("direct_listing_url_rejected") or 0
+            )
+            row["stage_counters"]["stable_id_count"] = sum(
+                1 for candidate in raw_candidates
+                if _external_id_from_url(candidate.get("source_url") or "")
+            )
+            try:
+                ai_items_returned = int(row["stage_counters"].get("ai_items_returned") or 0)
+            except (TypeError, ValueError):
+                ai_items_returned = 0
+            row["stage_counters"]["output_truncated"] = bool(
+                ai_items_returned >= source_result_cap
+                or len(raw_candidates) >= source_result_cap
+            )
+        raw_candidates = raw_candidates[:source_result_cap]
         row["candidate_count"] = len(raw_candidates)
+        row["stage_counters"]["normalized_or_deduped_candidate_count"] = len(raw_candidates)
 
         if raw_candidates:
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                verdicts = list(pool.map(
-                    lambda item: _classify_candidate(spec, item, ctx=ctx, timeout=timeout),
-                    raw_candidates,
-                ))
+            if spec.method == "deterministic" and spec.slug in {"fotocasa", "habitaclia"}:
+                # Sequential access makes the run-local URL cache an exact
+                # at-most-once network boundary. The existing per-source result
+                # cap bounds this targeted verification stage.
+                verdicts = _classify_targeted_detail_candidates(
+                    spec, raw_candidates, ctx, timeout,
+                    probe_cache=detail_probe_cache, cap=max_results_per_source,
+                )
+            else:
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    verdicts = list(pool.map(
+                        lambda item: _classify_candidate(spec, item, ctx=ctx, timeout=timeout),
+                        raw_candidates,
+                    ))
             row["candidates"] = verdicts
+            if spec.method == "deterministic" and spec.slug in {"fotocasa", "habitaclia"}:
+                row.update(_detail_verification_counters(verdicts))
             row["verified"] = sum(1 for v in verdicts if v["classification"] == "verified")
             row["reviewable"] = sum(1 for v in verdicts if v["classification"] == "reviewable")
             row["discarded"] = sum(1 for v in verdicts if v["classification"] == "discarded")
+            if spec.slug == "idealista":
+                row["stage_counters"].update({
+                    "hard_rejected_count": row["discarded"],
+                    "review_count": row["reviewable"],
+                    "actionable_count": row["verified"],
+                    "final_candidate_count": len(verdicts),
+                })
             row["status"] = "success"
             row["error"] = error
         else:
-            row["status"] = "failed" if error and error != "ai_disabled_by_option" else "no_results"
+            row["status"] = (
+                "omitted" if _is_pre_provider_gate_reason(error) else
+                "failed" if error and error != "ai_disabled_by_option" else
+                "no_results"
+            )
             row["error"] = error
 
         source_coverage.append(row)
+        if planner:
+            planner.record_executed(spec)
+            # Coverage is based on final quality classifications, not raw or
+            # duplicate discovery rows. Deterministic sources form one stage;
+            # AI sources are evaluated individually.
+            _postprocess_strict_quality_gate_v261(source_coverage, ctx)
+            _sr0_postprocess_fotocasa_inconclusive(source_coverage, ctx)
+            _postprocess_low_price_review_v2617(source_coverage, ctx)
+            from .adaptive_planner import actionable_sufficient_coverage, source_tier, SourceTier
+            tier = source_tier(spec)
+            deterministic_stage_done = tier != SourceTier.DETERMINISTIC or not any(
+                source_tier(item) == SourceTier.DETERMINISTIC
+                for item in execution_specs[spec_index + 1:]
+            )
+            if tier == SourceTier.DETERMINISTIC and deterministic_stage_done:
+                for observed_row in source_coverage:
+                    if observed_row.get("method") == "deterministic":
+                        _refresh_provider_efficiency(observed_row, ctx)
+                if _deterministic_exact_candidate_count(source_coverage, ctx) == 0:
+                    recovery_result = _run_zero_result_recovery(
+                        [item for item in execution_specs if item.method == "deterministic"],
+                        source_coverage, ctx, timeout, max_results_per_source,
+                        detail_probe_cache, request_governance=deterministic_request_governance,
+                    )
+                    for observed_row in source_coverage:
+                        if observed_row.get("method") == "deterministic":
+                            candidates = observed_row.get("candidates") or []
+                            observed_row["verified"] = sum(c.get("classification") == "verified" for c in candidates)
+                            observed_row["reviewable"] = sum(c.get("classification") == "reviewable" for c in candidates)
+                            observed_row["discarded"] = sum(c.get("classification") == "discarded" for c in candidates)
+                            _refresh_provider_efficiency(observed_row, ctx)
+                planner.observe_deterministic_coverage(source_coverage)
+            if deterministic_stage_done and actionable_sufficient_coverage(
+                planner.mode, source_coverage, planner.policy,
+            ):
+                planner.stop("sufficient_coverage", execution_specs[spec_index + 1:])
+                break
+            if planner.stop_reason == "budget_exhausted":
+                planner.stop("budget_exhausted", execution_specs[spec_index + 1:])
+                break
+            if openai_circuit.state.value == "OPEN":
+                planner.provider_degraded = True
+                planner.stop("provider_hard_failure", execution_specs[spec_index + 1:])
+                break
+
+    if planner:
+        # Keep every source visible and explain why it was not part of executed
+        # coverage. This includes mode limits and early adaptive stops.
+        existing = {row["source"] for row in source_coverage}
+        for spec in planner.specs:
+            if spec.slug not in existing:
+                row = _coverage_row(spec, False, "planner_omitted", "omitted")
+                row["error"] = planner.stop_reason or "mode_limit"
+                source_coverage.append(row)
+        if planner.stop_reason is None and not any(
+            row.get("attempted") for row in source_coverage
+        ):
+            planner.stop_reason = "no_applicable_sources"
+        elif planner.stop_reason is None:
+            from .search_quality_semantics import evaluate_search_quality_semantics
+            provider_failures = evaluate_search_quality_semantics({
+                "context": ctx, "source_coverage": source_coverage,
+            })["actual_provider_failure_count"]
+            if provider_failures:
+                planner.provider_degraded = True
+                planner.stop_reason = "provider_outage"
+        planner.apply_to_run(search_run, source_coverage)
 
     applicable = [r for r in source_coverage if r["status"] != "not_applicable"]
     is_complete = all(r["attempted"] for r in applicable)
 
     _postprocess_strict_quality_gate_v261(source_coverage, ctx)
+    _sr0_postprocess_fotocasa_inconclusive(source_coverage, ctx)
     _postprocess_low_price_review_v2617(source_coverage, ctx)
     for row in source_coverage:
         candidates = row.get("candidates") or []
         row["verified"] = sum(1 for v in candidates if v.get("classification") == "verified")
         row["reviewable"] = sum(1 for v in candidates if v.get("classification") == "reviewable")
         row["discarded"] = sum(1 for v in candidates if v.get("classification") == "discarded")
+        _refresh_safe_stage_counters(row)
+        _refresh_provider_efficiency(row, ctx)
+    coverage_contract = None
+    if planner:
+        from .adaptive_planner import coverage_plan, classify_coverage_result
+        from .models import SearchRun
+        coverage_contract = coverage_plan(
+            ctx.get("search_locations") or ([ctx.get("location")] if ctx.get("location") else []),
+            search_run.budget_max_credits,
+            maximum_calls=min(4, planner.policy.max_ai_calls),
+            planned_calls=planner.calls_planned,
+            consolidate_locations=bool(
+                planner.mode == "eco" and planner.budget_max == Decimal("1")
+            ),
+        )
+        if planner.mode == "eco" and planner.budget_max == Decimal("1"):
+            coverage_contract.update({
+                "eco_consolidated_locations_count": len(ctx.get("search_locations") or []),
+                "eco_consolidated_call_count": 1 if ctx.get("search_locations") else 0,
+            })
+        if ctx.get("geography_runtime"):
+            coverage_contract["geography_runtime"] = ctx["geography_runtime"]
+        format_degraded = any(
+            int((row.get("stage_counters") or {}).get("format_noncompliance_count") or 0)
+            for row in source_coverage
+        )
+        completed_locations = []
+        conclusive_calls = 0
+        for trace in coverage_batch_trace:
+            if trace.get("outcome") == ProviderOutcome.SUCCESS.value and trace.get("format_conclusive", True):
+                conclusive_calls += 1
+                completed_locations.extend(trace.get("locations") or [])
+        planned_locations = coverage_contract["planned_units"]
+        executed = min(planned_locations, len(list(filter(None, completed_locations))))
+        from .search_quality_semantics import evaluate_search_quality_semantics
+        quality_semantics = evaluate_search_quality_semantics({
+            "context": ctx, "source_coverage": source_coverage,
+        })
+        accepted = quality_semantics["actionable_count"]
+        degraded = (
+            format_degraded or planner.provider_degraded
+            or quality_semantics["actual_provider_failure_count"] > 0
+        )
+        classification = classify_coverage_result(
+            coverage_contract, executed_units=executed, accepted_candidates=accepted,
+            degraded=degraded,
+            stop_reason="format_noncompliance" if format_degraded else planner.stop_reason,
+        )
+        full = classification.pop("is_full_plan")
+        coverage_contract.update({
+            "calls_attempted": search_run.calls_attempted,
+            "calls_succeeded": conclusive_calls,
+            "calls_provider_succeeded": search_run.calls_succeeded,
+            "credits_consumed": float(search_run.budget_consumed_credits or 0),
+            "accepted_candidates": accepted,
+            "stop_reason": (
+                "completed_plan" if full else
+                "format_noncompliance" if format_degraded else
+                planner.stop_reason or "plan_limit"
+            ),
+            "format_degraded": format_degraded,
+            "reused": bool(search_run.reused_from_search_run_id),
+        })
+        coverage_contract.update(classification)
+        locations = list(ctx.get("search_locations") or [])
+        source_planned = len(planner.specs)
+        fresh_sources = {
+            row.get("source") for row in source_coverage
+            if row.get("attempted") and not row.get("reused") and row.get("source")
+        }
+        reused_sources = {
+            row.get("source") for row in source_coverage
+            if row.get("reused") and row.get("source")
+        }
+        effectively_covered_sources = fresh_sources | reused_sources
+        source_executed = len(fresh_sources)
+        external_planned = int(planner.calls_planned)
+        external_executed = sum(
+            1 for trace in coverage_batch_trace
+            if trace.get("outcome") == ProviderOutcome.SUCCESS.value
+        )
+        geographic_executed = len(dict.fromkeys(filter(None, completed_locations)))
+        coverage_contract.update({
+            "geographic_locations_planned": len(locations),
+            "geographic_locations_executed": geographic_executed,
+            "geographic_coverage_percent": round(100 * geographic_executed / len(locations), 2) if locations else None,
+            "sources_planned": source_planned,
+            "sources_executed": source_executed,
+            "sources_freshly_executed": source_executed,
+            "sources_reused": len(reused_sources),
+            "sources_effectively_covered": len(effectively_covered_sources),
+            "sources_omitted": max(0, source_planned - len(effectively_covered_sources)),
+            "source_coverage_percent": round(100 * len(effectively_covered_sources) / source_planned, 2) if source_planned else None,
+            "external_calls_planned": external_planned,
+            "external_calls_executed": external_executed,
+            "external_call_coverage_percent": round(100 * external_executed / external_planned, 2) if external_planned else None,
+        })
+        search_run.sources_executed = source_executed
+        search_run.sources_omitted = max(0, source_planned - len(effectively_covered_sources))
+        if not full and not degraded:
+            coverage_contract["coverage_status"] = search_run.coverage_status
+        if coverage_contract.get("coverage_axes"):
+            coverage_contract["coverage_axes"].update({
+                "geographic_locations_executed": len(dict.fromkeys(filter(None, completed_locations))),
+                "source_location_units_executed": executed,
+            })
+        if degraded:
+            search_run.coverage_status = SearchRun.CoverageStatus.DEGRADED_PROVIDER
+        elif full:
+            search_run.coverage_status = SearchRun.CoverageStatus.FULL
+            search_run.stop_reason = SearchRun.StopReason.COMPLETED_PLAN
     action_plan = _build_action_plan(source_coverage)
     write_result = None
     if write:
         write_result = _apply_action_plan_to_db(profile, ctx, source_coverage, action_plan, search_run=search_run)
+
+    from .search_quality_semantics import evaluate_search_quality_semantics
+    quality_semantics = evaluate_search_quality_semantics({
+        "context": ctx, "source_coverage": source_coverage,
+    })
+    if coverage_contract is not None:
+        coverage_contract["quality_semantics"] = quality_semantics
+
+    near_matches = recovery_result.get("near_match_candidates") or []
+    exact_count = sum(
+        1 for row in source_coverage for candidate in (row.get("candidates") or [])
+        if candidate.get("classification") in {"verified", "reviewable"}
+        and not _candidate_constraint_violations(ctx, candidate)
+    )
+    recovery_observability = {
+        "exact_candidate_count": exact_count,
+        "near_match_candidate_count": len(near_matches),
+        "near_match_budget_count": sum(item.get("match_tier") == "BUDGET_PLUS_10_PERCENT" for item in near_matches),
+        "near_match_bedroom_count": sum(item.get("match_tier") == "BEDROOM_MINUS_ONE" for item in near_matches),
+        "near_match_tier_used": recovery_result.get("near_match_tier_used"),
+        "deterministic_exact_zero": bool(recovery_result.get("deterministic_exact_zero")),
+        "fallback_executed": bool(recovery_result.get("fallback_executed")),
+        "fallback_stop_reason": recovery_result.get("fallback_stop_reason"),
+        "fallback_trace": recovery_result.get("fallback_trace") or [],
+        "fallback_skipped_technical_zero_count": int(
+            recovery_result.get("fallback_skipped_technical_zero_count") or 0
+        ),
+    }
+    governance_observability = {
+        "provider_request_cap": deterministic_request_governance["provider_request_cap"],
+        "providers": deterministic_request_governance.get("providers", {}),
+        "provider_requests_attempted": sum(
+            int(state.get("provider_requests_attempted") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_succeeded": sum(
+            int(state.get("provider_requests_succeeded") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_technical_failed": sum(
+            int(state.get("provider_requests_technical_failed") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_business_zero": sum(
+            int(state.get("provider_requests_business_zero") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_ambiguous": sum(
+            int(state.get("provider_requests_ambiguous") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_skipped_circuit_breaker": sum(
+            int(state.get("provider_requests_skipped_circuit_breaker") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "provider_requests_skipped_cap": sum(
+            int(state.get("provider_requests_skipped_cap") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "circuit_breaker_eligible_failure_count": sum(
+            int(state.get("circuit_breaker_eligible_failure_count") or 0)
+            for state in deterministic_request_governance.get("providers", {}).values()
+        ),
+        "fallback_eligible_geographies": {
+            provider: _governance_eligible_locations(deterministic_request_governance, provider)
+            for provider in deterministic_request_governance.get("providers", {})
+        },
+        "provider_execution_location_order": {
+            provider: state.get("provider_execution_location_order") or []
+            for provider, state in deterministic_request_governance.get("providers", {}).items()
+        },
+        "provider_anchor_location": {
+            provider: state.get("provider_anchor_location")
+            for provider, state in deterministic_request_governance.get("providers", {}).items()
+        },
+        "provider_anchor_attempted": {
+            provider: bool(state.get("provider_anchor_attempted"))
+            for provider, state in deterministic_request_governance.get("providers", {}).items()
+        },
+        "provider_anchor_result_class": {
+            provider: state.get("provider_anchor_result_class")
+            for provider, state in deterministic_request_governance.get("providers", {}).items()
+        },
+    }
+    fresh_deterministic_requests = governance_observability["provider_requests_attempted"]
+    fresh_external_calls = max(
+        0,
+        int(planner.calls_attempted if planner else 0)
+        - int(planner.start_calls_attempted if planner else 0),
+    )
+    reuse_observability.update({
+        "fresh_provider_requests_attempted": fresh_deterministic_requests,
+        "fresh_external_calls_attempted": fresh_external_calls,
+        "provider_request_governance_live_exercised": bool(fresh_deterministic_requests),
+        "provider_request_governance_live_state": (
+            "EXERCISED" if fresh_deterministic_requests else
+            "NOT_EXERCISED_DUE_TO_REUSE" if reuse_observability["reuse_applied"]
+            else "NOT_EXERCISED"
+        ),
+    })
+    if coverage_contract is not None:
+        coverage_contract.update(recovery_observability)
+        coverage_contract["provider_request_governance"] = governance_observability
+        coverage_contract["reuse_observability"] = reuse_observability
 
     return {
         "version": "V2.6.1.8-write" if write else "V2.6.1.8-dry-run",
@@ -1565,8 +3373,20 @@ def run_hybrid_discovery_v261(
         "context": ctx,
         "is_complete": is_complete,
         "source_coverage": source_coverage,
+        "planner_efficiency": planner.efficiency_observability() if planner else None,
+        "provider_request_governance": governance_observability,
+        "reuse_observability": reuse_observability,
+        "stage_counters": _aggregate_safe_stage_counters(source_coverage),
         "action_plan": action_plan,
         "write_result": write_result,
+        "reused": bool(search_run and search_run.reused_from_search_run_id),
+        "reused_from_search_run_id": (
+            search_run.reused_from_search_run_id if search_run else None
+        ),
+        "coverage_contract": coverage_contract,
+        "quality_semantics": quality_semantics,
+        "zero_result_recovery": recovery_observability,
+        "near_match_candidates": near_matches,
         "totals": {
             "sources": len(source_coverage),
             "applicable": len(applicable),
@@ -1575,11 +3395,17 @@ def run_hybrid_discovery_v261(
             "no_results": sum(1 for r in source_coverage if r["status"] == "no_results"),
             "failed": sum(1 for r in source_coverage if r["status"] == "failed"),
             "not_applicable": sum(1 for r in source_coverage if r["status"] == "not_applicable"),
+            "skipped_circuit": sum(1 for r in source_coverage if r["status"] == "skipped_circuit"),
             "verified": sum(r["verified"] for r in source_coverage),
             "reviewable": sum(r["reviewable"] for r in source_coverage),
+            "hard_clean": quality_semantics["hard_clean_count"],
+            "review_required": quality_semantics["review_required_count"],
+            "actionable": quality_semantics["actionable_count"],
+            "unavailable": quality_semantics["unavailable_count"],
             "discarded": sum(r["discarded"] for r in source_coverage),
             "would_create_captured": action_plan["totals"].get("would_create_captured", 0),
             "would_create_in_review": action_plan["totals"].get("would_create_in_review", 0),
+            "hold_for_review": action_plan["totals"].get("hold_for_review", 0),
             "skip_discarded": action_plan["totals"].get("skip_discarded", 0),
             "skip_duplicate": action_plan["totals"].get("skip_duplicate", 0),
             "would_mark_existing_discarded": action_plan["totals"].get("would_mark_existing_discarded", 0),

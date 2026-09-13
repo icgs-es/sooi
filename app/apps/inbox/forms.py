@@ -17,7 +17,7 @@ class EmailAccountForm(forms.ModelForm):
             "imap_port",
             "imap_use_ssl",
             "imap_username",
-            "imap_password",
+            "imap_secret_ref",
             "is_active",
         ]
         widgets = {
@@ -26,7 +26,7 @@ class EmailAccountForm(forms.ModelForm):
             "provider_label": forms.TextInput(attrs={"placeholder": "Ej. Gmail, IONOS, Outlook"}),
             "imap_host": forms.TextInput(attrs={"placeholder": "Ej. imap.gmail.com"}),
             "imap_username": forms.TextInput(attrs={"placeholder": "Normalmente el email completo"}),
-            "imap_password": forms.PasswordInput(render_value=True),
+            "imap_secret_ref": forms.TextInput(attrs={"placeholder": "Ej. imap-account-42"}),
         }
 
 
@@ -303,6 +303,7 @@ def _extract_initial_capture_data(inbound_email):
     description = body[:1200] if body else inbound_email.snippet
 
     return {
+        "search_profile": inbound_email.search_profile,
         "title": title,
         "source_url": selected_url,
         "operation_type": _guess_operation_type_from_text(full_text),

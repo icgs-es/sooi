@@ -34,7 +34,7 @@
       <div>
         <label>Estado</label>
         <select name="status">
-          <option value="">Todos</option>
+          <option value="">Operativas</option>
           {% for value, label in status_choices %}
             <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
@@ -60,12 +60,44 @@
 
   <div class="page-card opp-table-card">
     {% if opportunities %}
+      <form
+        id="opp-bulk-discard-form"
+        method="post"
+        action="/app/oportunidades/accion-masiva/descartar/"
+        style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:14px; padding:12px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc;"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="selected_ids" id="opp-bulk-selected-ids">
+
+        <div style="font-weight:700;">
+          Selección masiva
+          <span id="opp-bulk-counter" style="font-weight:600; color:#64748b; margin-left:8px;">0 seleccionadas</span>
+        </div>
+
+        <button class="btn btn-danger" type="submit" onclick="return oppPrepareBulkDiscard();">
+          Descartar seleccionadas
+        </button>
+      </form>
       <div class="opp-table-wrap">
         <table class="opp-table">
+          <colgroup>
+            <col class="opp-col-check">
+            <col>
+            <col class="opp-col-status">
+            <col class="opp-col-priority">
+            <col class="opp-col-price">
+            <col class="opp-col-yield">
+            <col class="opp-col-next">
+            <col class="opp-col-review">
+            <col class="opp-col-contact">
+            <col class="opp-col-actions">
+          </colgroup>
           <thead>
             <tr>
+              <th style="width:36px;">
+                <input type="checkbox" id="opp-bulk-master" aria-label="Seleccionar oportunidades visibles">
+              </th>
               <th>Título</th>
-              <th>Búsqueda</th>
               <th>Estado</th>
               <th>Prioridad</th>
               <th>Precio</th>
@@ -80,19 +112,18 @@
           <tbody>
             {% for item in opportunities %}
               <tr>
-                <td class="opp-table__title">
-                  <a href="/app/oportunidades/{{ item.id }}/">{{ item.title }}</a>
-
-                  <div class="opp-table__meta">
-                    {% if item.source_name %}{{ item.source_name }} · {% endif %}
-                    {% if item.captured_property %}
-                      {{ item.captured_property.get_operation_type_display }} · {{ item.captured_property.get_property_type_display }}
-                    {% endif %}
-                  </div>
-                </td>
-
                 <td>
-                  {% include "seguimiento/_search_badge.html" with search_profile=item.search_profile %}
+                  <input
+                    type="checkbox"
+                    class="opp-bulk-checkbox"
+                    value="{{ item.id }}"
+                    {% if item.status == "discarded" or item.status == "closed" %}disabled{% endif %}
+                    aria-label="Seleccionar oportunidad {{ item.id }}"
+                  >
+                </td>
+                <td class="opp-table__title">
+                  {% url "opportunity_detail" item.id as opportunity_detail_url %}
+                  {% include "inmuebles/_property_summary.html" with capture=item.captured_property compact=True show_price=False property_url=opportunity_detail_url %}
                 </td>
 
                 <td>
@@ -120,6 +151,12 @@
                   {% if item.next_action_notes %}
                     <div class="opp-table__meta">{{ item.next_action_notes }}</div>
                   {% endif %}
+
+                  {% if item.next_review_at %}
+                    <div class="opp-table__meta opp-table__meta--review-inline">
+                      Rev. {{ item.next_review_at|date:"d/m/Y" }} · {{ item.next_review_at|date:"H:i" }}
+                    </div>
+                  {% endif %}
                 </td>
 
                 <td>
@@ -144,21 +181,14 @@
                 </td>
 
                 <td class="opp-table__actions-cell">
-                  <div class="opp-row-actions">
-                    <a class="opp-row-action" href="/app/oportunidades/{{ item.id }}/">Abrir</a>
-                    <a class="opp-row-action" href="/app/oportunidades/{{ item.id }}/editar/">Editar</a>
-
-                    {% if item.captured_property %}
-                      <a class="opp-row-action opp-row-action--primary" href="/app/captacion/{{ item.captured_property.id }}/">Origen</a>
-                    {% else %}
-                      <span class="opp-row-action-spacer"></span>
-                    {% endif %}
-                  </div>
+                  <a
+                    class="sooi-row-primary-action"
+                    href="/app/oportunidades/{{ item.id }}/"
+                  >Ver ficha</a>
 
                   <details class="action-menu">
                     <summary class="action-menu__trigger">⋯</summary>
                     <div class="action-menu__panel">
-                      <a class="action-menu__item" href="/app/oportunidades/{{ item.id }}/">Abrir oportunidad</a>
                       <a class="action-menu__item" href="/app/oportunidades/{{ item.id }}/editar/">Editar oportunidad</a>
 
                       {% if item.captured_property %}
@@ -168,7 +198,7 @@
                       {% endif %}
 
                       {% if item.source_url %}
-                        <a class="action-menu__item" href="{{ item.source_url }}" target="_blank" rel="noopener">
+                        <a class="action-menu__item" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">
                           Abrir anuncio origen
                         </a>
                       {% endif %}
@@ -188,4 +218,826 @@
       </div>
     {% endif %}
   </div>
+
+  <script>
+    (function () {
+      const master = document.getElementById("opp-bulk-master");
+      const boxes = Array.from(document.querySelectorAll(".opp-bulk-checkbox:not(:disabled)"));
+      const counter = document.getElementById("opp-bulk-counter");
+      const hidden = document.getElementById("opp-bulk-selected-ids");
+
+      function selectedIds() {
+        return boxes.filter(box => box.checked).map(box => box.value);
+      }
+
+      function updateCounter() {
+        const count = selectedIds().length;
+
+        if (counter) {
+          counter.textContent = count + (count === 1 ? " seleccionada" : " seleccionadas");
+        }
+
+        if (master) {
+          master.checked = boxes.length > 0 && count === boxes.length;
+          master.indeterminate = count > 0 && count < boxes.length;
+        }
+      }
+
+      if (master) {
+        master.addEventListener("change", function () {
+          boxes.forEach(box => {
+            box.checked = master.checked;
+          });
+          updateCounter();
+        });
+      }
+
+      boxes.forEach(box => {
+        box.addEventListener("change", updateCounter);
+      });
+
+      window.oppPrepareBulkDiscard = function () {
+        const ids = selectedIds();
+
+        if (!ids.length) {
+          alert("Selecciona al menos una oportunidad activa.");
+          return false;
+        }
+
+        hidden.value = ids.join(",");
+
+        return confirm("Vas a descartar " + ids.length + " oportunidad(es). Quedarán guardadas como histórico.");
+      };
+
+      updateCounter();
+    })();
+  </script>
+
+
+  <style>
+    /* SOOI_LISTADOS_NORMALIZATION_V1_4 */
+
+    /*
+     * Patrón único:
+     * [ Ver ficha ] [ ... ]
+     */
+
+    .sooi-row-primary-action {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      box-sizing:border-box;
+      height:26px;
+      padding:0 7px;
+      border:1px solid #dbe3ee;
+      border-radius:8px;
+      background:#fff;
+      color:#334155;
+      font-size:10px;
+      font-weight:700;
+      line-height:1;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .sooi-row-primary-action:hover {
+      background:#f8fafc;
+      border-color:#cbd5e1;
+      text-decoration:none;
+    }
+
+    .capture-row-actions,
+    .opp-table__actions-cell {
+      display:flex;
+      align-items:center;
+      gap:4px;
+      min-width:0;
+      white-space:nowrap;
+    }
+
+    .action-menu {
+      position:relative !important;
+      display:inline-block !important;
+      flex:0 0 auto;
+      margin:0 !important;
+    }
+
+    .action-menu summary {
+      list-style:none;
+    }
+
+    .action-menu summary::-webkit-details-marker {
+      display:none;
+    }
+
+    .action-menu__trigger {
+      display:block !important;
+      box-sizing:border-box !important;
+      width:26px !important;
+      min-width:26px !important;
+      height:26px !important;
+      padding:0 !important;
+      border:1px solid #dbe3ee !important;
+      border-radius:8px !important;
+      background:#fff !important;
+      color:#475569 !important;
+      font-size:15px !important;
+      font-weight:700 !important;
+      line-height:24px !important;
+      text-align:center !important;
+      cursor:pointer;
+    }
+
+    .action-menu__trigger:hover {
+      background:#f8fafc !important;
+      border-color:#cbd5e1 !important;
+    }
+
+    .action-menu__panel {
+      display:none !important;
+      position:absolute !important;
+      top:calc(100% + 4px) !important;
+      right:0 !important;
+      left:auto !important;
+      transform:none !important;
+      z-index:600 !important;
+
+      box-sizing:border-box !important;
+      width:190px !important;
+      min-width:190px !important;
+      max-width:190px !important;
+
+      padding:5px !important;
+      flex-direction:column !important;
+      align-items:stretch !important;
+      gap:0 !important;
+
+      border:1px solid #dbe3ee !important;
+      border-radius:9px !important;
+      background:#fff !important;
+      box-shadow:0 12px 26px rgba(15,23,42,.14) !important;
+      white-space:normal !important;
+    }
+
+    .action-menu[open] > .action-menu__panel {
+      display:flex !important;
+    }
+
+    .action-menu__panel form {
+      display:block !important;
+      width:100% !important;
+      margin:0 !important;
+    }
+
+    .action-menu__item,
+    .action-menu__panel button.action-menu__item {
+      display:block !important;
+      box-sizing:border-box !important;
+      width:100% !important;
+      height:auto !important;
+      min-height:0 !important;
+
+      margin:0 !important;
+      padding:6px 7px !important;
+
+      border:0 !important;
+      border-radius:6px !important;
+      background:transparent !important;
+
+      color:#334155 !important;
+      font-size:10.5px !important;
+      font-weight:600 !important;
+      line-height:1.25 !important;
+      text-align:left !important;
+      white-space:normal !important;
+      text-decoration:none !important;
+    }
+
+    .action-menu__item:hover,
+    .action-menu__panel button.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    .action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+
+    .action-menu__panel label {
+      margin:4px 3px 2px !important;
+      padding:0 !important;
+      color:#64748b !important;
+      font-size:9.5px !important;
+      font-weight:700 !important;
+    }
+
+    .action-menu__panel select {
+      box-sizing:border-box !important;
+      width:100% !important;
+      margin:2px 0 4px !important;
+      padding:5px 6px !important;
+      border:1px solid #cbd5e1 !important;
+      border-radius:6px !important;
+      background:#fff !important;
+      font-size:10px !important;
+    }
+  </style>
+
+  <style>
+    /* Oportunidades · tabla ocupa todo el contenedor */
+    .opp-table-wrap {
+      width:100% !important;
+      max-width:none !important;
+    }
+
+    .opp-table {
+      width:100% !important;
+      max-width:none !important;
+      table-layout:fixed !important;
+    }
+
+    .opp-col-check    { width:36px; }
+    .opp-col-status   { width:84px; }
+    .opp-col-priority { width:80px; }
+    .opp-col-price    { width:98px; }
+    .opp-col-yield    { width:105px; }
+    .opp-col-next     { width:190px; }
+    .opp-col-review   { width:105px; }
+    .opp-col-contact  { width:100px; }
+    .opp-col-actions  { width:112px; }
+
+    .opp-table__title,
+    .opp-table__title .property-summary,
+    .opp-table__title .property-summary__main,
+    .opp-table__title .property-summary__identity {
+      min-width:0 !important;
+      max-width:none !important;
+      width:100% !important;
+    }
+
+    .opp-table__title .property-summary--compact .property-summary__title {
+      max-width:none !important;
+    }
+
+    .opp-table__actions-cell {
+      justify-content:flex-start !important;
+    }
+  </style>
+
+  <script>
+    /* SOOI_LISTADOS_NORMALIZATION_V1_4_BEHAVIOR */
+    (function () {
+      const menus = Array.from(
+        document.querySelectorAll("details.action-menu")
+      );
+
+      function closeAll(except) {
+        menus.forEach(function (menu) {
+          if (menu !== except) {
+            menu.open = false;
+          }
+        });
+      }
+
+      menus.forEach(function (menu) {
+        menu.addEventListener("toggle", function () {
+          if (menu.open) {
+            closeAll(menu);
+          }
+        });
+      });
+
+      document.addEventListener("click", function (event) {
+        if (!event.target.closest("details.action-menu")) {
+          closeAll(null);
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeAll(null);
+        }
+      });
+    })();
+  </script>
+
+
+  <style>
+    /* SOOI_ACTION_MENU_PANEL_FIX_V1_4_2 */
+
+    /*
+     * Normalización fuerte del contenido del dropdown.
+     * Evita herencias de .page-card select/button/form.
+     */
+    .action-menu__panel {
+      width:210px !important;
+      min-width:210px !important;
+      max-width:210px !important;
+
+      padding:7px !important;
+      overflow:visible !important;
+
+      flex-direction:column !important;
+      align-items:stretch !important;
+      justify-content:flex-start !important;
+    }
+
+    .action-menu__panel > * {
+      position:static !important;
+      float:none !important;
+      flex:none !important;
+      width:100% !important;
+      max-width:100% !important;
+      box-sizing:border-box !important;
+    }
+
+    .action-menu__panel form {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      margin:0 !important;
+      padding:0 !important;
+
+      flex:none !important;
+    }
+
+    /* Separación real entre bloques operativos */
+    .action-menu__panel form + form,
+    .action-menu__panel form + a,
+    .action-menu__panel a + form {
+      margin-top:3px !important;
+      padding-top:3px !important;
+      border-top:1px solid #f1f5f9 !important;
+    }
+
+    /*
+     * Select: eliminar el min-height global de page-card.
+     */
+    .action-menu__panel select {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      height:30px !important;
+      min-height:30px !important;
+      max-height:30px !important;
+
+      margin:2px 0 5px !important;
+      padding:3px 24px 3px 7px !important;
+
+      border:1px solid #cbd5e1 !important;
+      border-radius:6px !important;
+      background-color:#fff !important;
+
+      font-size:10.5px !important;
+      line-height:1.15 !important;
+    }
+
+    .action-menu__panel label {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-height:0 !important;
+
+      margin:0 0 2px !important;
+      padding:2px 1px !important;
+
+      color:#64748b !important;
+      font-size:9.5px !important;
+      line-height:1.15 !important;
+      font-weight:700 !important;
+    }
+
+    /*
+     * Botones: neutralizar por completo
+     * .page-card button[type=submit].
+     */
+    .page-card .action-menu__panel button.action-menu__item,
+    .action-menu__panel button.action-menu__item,
+    .action-menu__panel a.action-menu__item {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      box-sizing:border-box !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      height:auto !important;
+      min-height:28px !important;
+      max-height:none !important;
+
+      margin:0 !important;
+      padding:6px 8px !important;
+
+      border:0 !important;
+      border-radius:6px !important;
+
+      font-size:10.5px !important;
+      line-height:1.25 !important;
+      text-align:left !important;
+
+      white-space:normal !important;
+      overflow:visible !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item {
+      background:transparent !important;
+      color:#334155 !important;
+      justify-content:flex-start !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item:hover,
+    .action-menu__panel a.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+  </style>
+
+
+  <style>
+    /* SOOI_ACTION_MENU_READABILITY_V1_4_3 */
+
+    /*
+     * Más aire, jerarquía y legibilidad.
+     * Conserva el esquema visual de V1.4.2.
+     */
+    .action-menu__panel {
+      width:224px !important;
+      min-width:224px !important;
+      max-width:224px !important;
+
+      padding:10px !important;
+
+      max-height:min(420px, calc(100vh - 24px)) !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+
+      border-radius:11px !important;
+      box-shadow:0 14px 32px rgba(15,23,42,.16) !important;
+    }
+
+    /*
+     * Cada formulario es un bloque vertical real.
+     */
+    .action-menu__panel form {
+      display:flex !important;
+      flex-direction:column !important;
+      align-items:stretch !important;
+      gap:4px !important;
+
+      width:100% !important;
+      padding:0 !important;
+      margin:0 !important;
+    }
+
+    /*
+     * Separación clara entre acciones.
+     */
+    .action-menu__panel form + form,
+    .action-menu__panel form + a,
+    .action-menu__panel a + form,
+    .action-menu__panel a + a {
+      margin-top:6px !important;
+      padding-top:6px !important;
+      border-top:1px solid #eef2f7 !important;
+    }
+
+    /*
+     * Etiqueta de Disponibilidad.
+     */
+    .action-menu__panel label {
+      display:block !important;
+      margin:0 !important;
+      padding:1px 2px 2px !important;
+
+      color:#64748b !important;
+      font-size:10.5px !important;
+      font-weight:700 !important;
+      line-height:1.25 !important;
+    }
+
+    /*
+     * Selector más alto y mucho más legible.
+     */
+    .page-card .action-menu__panel select,
+    .action-menu__panel select {
+      display:block !important;
+
+      width:100% !important;
+      height:34px !important;
+      min-height:34px !important;
+      max-height:34px !important;
+
+      margin:0 0 2px !important;
+      padding:5px 28px 5px 8px !important;
+
+      border:1px solid #cbd5e1 !important;
+      border-radius:7px !important;
+
+      background:#fff !important;
+      color:#334155 !important;
+
+      font-size:11.5px !important;
+      font-weight:500 !important;
+      line-height:1.2 !important;
+    }
+
+    /*
+     * Acciones: altura mínima cómoda.
+     */
+    .page-card .action-menu__panel button.action-menu__item,
+    .action-menu__panel button.action-menu__item,
+    .action-menu__panel a.action-menu__item {
+      display:flex !important;
+      align-items:center !important;
+      justify-content:flex-start !important;
+
+      width:100% !important;
+      min-height:32px !important;
+      height:auto !important;
+
+      padding:7px 9px !important;
+
+      border-radius:7px !important;
+
+      font-size:11.5px !important;
+      font-weight:600 !important;
+      line-height:1.25 !important;
+
+      white-space:normal !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item:hover,
+    .action-menu__panel a.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    /*
+     * Mantener semántica cromática.
+     */
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--primary,
+    .action-menu__panel
+    a.action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--danger,
+    .action-menu__panel
+    a.action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+  </style>
+
+
+  <style>
+    /* SOOI_OPORTUNIDADES_VISUAL_POLISH_V1_6 */
+
+    /*
+     * El listado usa todo el ancho disponible.
+     */
+    .opp-table-card {
+      width:100% !important;
+      max-width:none !important;
+    }
+
+    .opp-table-wrap {
+      width:100% !important;
+      max-width:none !important;
+      overflow-x:auto;
+    }
+
+    .opp-table {
+      width:100% !important;
+      min-width:1120px;
+      max-width:none !important;
+      table-layout:fixed !important;
+      border-collapse:collapse;
+    }
+
+    /*
+     * Distribución:
+     * Título absorbe el espacio restante.
+     */
+    .opp-col-check    { width:38px !important; }
+    .opp-col-status   { width:86px !important; }
+    .opp-col-priority { width:82px !important; }
+    .opp-col-price    { width:98px !important; }
+    .opp-col-yield    { width:108px !important; }
+    .opp-col-next     { width:185px !important; }
+    .opp-col-review   { width:108px !important; }
+    .opp-col-contact  { width:110px !important; }
+    .opp-col-actions  { width:116px !important; }
+
+    .opp-table th {
+      padding:9px 8px !important;
+      color:#64748b !important;
+      font-size:10.5px !important;
+      font-weight:800 !important;
+      letter-spacing:.025em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      vertical-align:middle;
+    }
+
+    .opp-table td {
+      padding:11px 8px !important;
+      vertical-align:top !important;
+      border-bottom:1px solid #edf2f7 !important;
+    }
+
+    .opp-table tbody tr {
+      transition:background .12s ease;
+    }
+
+    .opp-table tbody tr:hover {
+      background:#f8fafc;
+    }
+
+    /*
+     * Inmueble: protagonista visual.
+     */
+    .opp-table__title {
+      padding-right:16px !important;
+    }
+
+    .opp-table__title,
+    .opp-table__title .property-summary,
+    .opp-table__title .property-summary__main,
+    .opp-table__title .property-summary__identity {
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+    }
+
+    .opp-table__title
+    .property-summary--compact
+    .property-summary__title {
+      display:block;
+      max-width:100% !important;
+      margin-bottom:3px !important;
+
+      color:#0f172a !important;
+      font-size:12.5px !important;
+      font-weight:800 !important;
+      line-height:1.2 !important;
+
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+    }
+
+    .opp-table__title
+    .property-summary--compact
+    .property-summary__location {
+      font-size:11px !important;
+      line-height:1.25 !important;
+    }
+
+    .opp-table__title
+    .property-summary--compact
+    .property-summary__facts,
+    .opp-table__title
+    .property-summary--compact
+    .property-summary__states,
+    .opp-table__title
+    .property-summary--compact
+    .property-summary__context {
+      font-size:10.5px !important;
+      line-height:1.25 !important;
+    }
+
+    /*
+     * Valores operativos compactos.
+     */
+    .opp-table__money {
+      font-weight:800 !important;
+      white-space:nowrap !important;
+      color:#0f172a !important;
+    }
+
+    .opp-table__meta {
+      margin-top:3px !important;
+      color:#64748b !important;
+      font-size:10.5px !important;
+      line-height:1.25 !important;
+    }
+
+    .opp-badge {
+      white-space:nowrap !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+    }
+
+    /*
+     * Acciones: mismo criterio definitivo que Captación.
+     */
+    .opp-table__actions-cell {
+      display:flex !important;
+      align-items:center !important;
+      justify-content:flex-start !important;
+      gap:5px !important;
+
+      padding-top:10px !important;
+      white-space:nowrap !important;
+    }
+
+    .opp-table__actions-cell .sooi-row-primary-action {
+      height:28px !important;
+      padding:0 8px !important;
+      font-size:10.5px !important;
+      border-radius:8px !important;
+    }
+
+    .opp-table__actions-cell .action-menu__trigger {
+      width:28px !important;
+      min-width:28px !important;
+      height:28px !important;
+      line-height:26px !important;
+    }
+
+    /*
+     * Menú secundario de Oportunidades:
+     * limpio, vertical y sin controles embebidos.
+     */
+    .opp-table__actions-cell .action-menu__panel {
+      width:220px !important;
+      min-width:220px !important;
+      max-width:220px !important;
+      padding:8px !important;
+    }
+
+    .opp-table__actions-cell
+    .action-menu__panel
+    .action-menu__item {
+      min-height:32px !important;
+      padding:7px 9px !important;
+
+      display:flex !important;
+      align-items:center !important;
+
+      color:#334155 !important;
+      font-size:11.5px !important;
+      font-weight:600 !important;
+      line-height:1.25 !important;
+    }
+
+    .opp-table__actions-cell
+    .action-menu__panel
+    .action-menu__item + .action-menu__item {
+      border-top:1px solid #f1f5f9 !important;
+    }
+
+    /*
+     * Tarjeta y selección masiva más integradas.
+     */
+    .opp-table-card {
+      padding:18px 20px !important;
+    }
+
+    #opp-bulk-discard-form {
+      margin-bottom:10px !important;
+    }
+
+    /*
+     * En pantallas razonables se conserva el layout completo.
+     * Solo aparece scroll horizontal cuando realmente hace falta.
+     */
+    @media (min-width:1400px) {
+      .opp-table {
+        min-width:0 !important;
+      }
+    }
+  </style>
+
 {% endblock %}

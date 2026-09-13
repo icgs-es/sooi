@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import SearchProfile, SearchRun
+from .models import GeographicArea, SearchProfile, SearchRun
+
+
+@admin.register(GeographicArea)
+class GeographicAreaAdmin(admin.ModelAdmin):
+    list_display = ("name", "area_type", "province", "is_active")
+    list_filter = ("area_type", "province", "is_active")
+    search_fields = ("name", "province")
 
 
 @admin.register(SearchProfile)

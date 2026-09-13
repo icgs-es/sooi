@@ -8,13 +8,43 @@
     <h1>Inbox Email</h1>
     <p>Bandeja operativa para revisar correos y convertirlos en captaciones.</p>
 
+  <div class="page-card sooi-inbox-help-card" style="margin-top:18px; border-left:4px solid #2563eb;">
+    <h2 style="font-size:20px; margin:0 0 8px;">Cómo usar la captación por email</h2>
+
+    <p style="margin:0 0 10px; color:#475569;">
+      Cada búsqueda de SOOI tiene un email propio. Cuando compartes un inmueble desde un portal inmobiliario a ese email,
+      SOOI lo recibe aquí y lo vincula automáticamente al expediente correcto.
+    </p>
+
+    <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-top:14px;">
+      <div style="padding:12px; border:1px solid #dbe3ee; border-radius:14px; background:#f8fafc;">
+        <strong>1. Copia el email de la búsqueda</strong>
+        <p style="margin:6px 0 0; color:#64748b;">Ejemplo: <code>busqueda9@sooi.io</code></p>
+      </div>
+
+      <div style="padding:12px; border:1px solid #dbe3ee; border-radius:14px; background:#f8fafc;">
+        <strong>2. Comparte el anuncio</strong>
+        <p style="margin:6px 0 0; color:#64748b;">Desde Idealista, Fotocasa, Habitaclia u otro portal, usa la opción compartir/enviar por email.</p>
+      </div>
+
+      <div style="padding:12px; border:1px solid #dbe3ee; border-radius:14px; background:#f8fafc;">
+        <strong>3. Actualiza y convierte</strong>
+        <p style="margin:6px 0 0; color:#64748b;">Pulsa <strong>Actualizar bandeja</strong>, revisa los datos recibidos y convierte el email en captación.</p>
+      </div>
+    </div>
+<p style="margin:10px 0 0; color:#64748b; font-size:14px;">
+      Nota de producto: para V3 está previsto estudiar integraciones con APIs oficiales y plataformas inmobiliarias cuando sean viables
+      técnica y comercialmente, para mejorar la fiabilidad de la captación automática.
+    </p>
+  </div>
+
+
     <div class="actions">
       <form method="post" action="/app/inbox/sincronizar/" style="display:inline;">
         {% csrf_token %}
         <button class="btn btn-primary" type="submit">Actualizar bandeja</button>
       </form>
-      <a class="btn" href="/app/inbox/cuentas/">Configurar cuentas</a>
-    </div>
+</div>
   </div>
 
   <div class="page-card" style="margin-top:18px;">

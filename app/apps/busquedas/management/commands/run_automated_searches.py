@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from apps.busquedas.models import SearchProfile, SearchRun
 from apps.busquedas.tasks import run_search_profile_task
+from apps.ia.usage import can_run_ai_discovery, format_ai_quota_message
 
 
 class Command(BaseCommand):
@@ -107,6 +108,12 @@ class Command(BaseCommand):
                         f"OMITIDA: ejecución reciente #{recent_run.id} dentro de las últimas {min_hours} horas."
                     )
                 )
+                continue
+
+            allowed, usage = can_run_ai_discovery(search.owner)
+            if not allowed:
+                total_skipped += 1
+                self.stdout.write(self.style.WARNING(format_ai_quota_message(usage)))
                 continue
 
             if not execute:

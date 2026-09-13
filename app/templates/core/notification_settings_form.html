@@ -1,0 +1,68 @@
+{% extends "core/base_private.html" %}
+
+{% block title %}Notificaciones | SOOI{% endblock %}
+{% block section_title %}Notificaciones{% endblock %}
+
+{% block content %}
+  <div class="page-card" style="max-width:760px;">
+    <h1>Notificaciones</h1>
+    <p>Configura cómo quieres recibir información sobre tu trabajo comercial.</p>
+  </div>
+
+  <div class="page-card" style="max-width:760px; margin-top:18px;">
+    <h2 style="margin-top:0;">Resumen diario por correo</h2>
+    <p>
+      SOOI utilizará la misma información que aparece en “Hoy” para preparar un resumen
+      de las acciones que requieren tu atención.
+    </p>
+
+    <div style="margin-top:18px; padding:14px; border-radius:12px; background:#f8fafc;">
+      <strong>Correo de destino</strong>
+      {% if request.user.email %}
+        <div style="margin-top:5px;">{{ request.user.email }}</div>
+      {% else %}
+        <div role="alert" style="margin-top:5px; color:#9a3412;">
+          Tu cuenta no tiene un correo configurado.
+        </div>
+      {% endif %}
+    </div>
+
+    <form method="post" style="margin-top:20px;">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      <div style="padding:16px; border:1px solid #dbe3ee; border-radius:12px;">
+        <label for="{{ form.daily_digest_enabled.id_for_label }}" style="display:flex; align-items:center; gap:10px;">
+          {{ form.daily_digest_enabled }}
+          <strong>{{ form.daily_digest_enabled.label }}</strong>
+        </label>
+        {{ form.daily_digest_enabled.errors }}
+        <div class="helptext">{{ form.daily_digest_enabled.help_text }}</div>
+        <p style="margin-top:10px;">
+          Desactivado: no se enviará ningún resumen diario. Activado: SOOI podrá enviarte
+          el resumen diario a la hora indicada.
+        </p>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label for="{{ form.daily_digest_time.id_for_label }}"><strong>{{ form.daily_digest_time.label }}</strong></label>
+        {{ form.daily_digest_time }}
+        {{ form.daily_digest_time.errors }}
+        <div class="helptext">{{ form.daily_digest_time.help_text }}</div>
+      </div>
+
+      <p style="margin-top:18px; padding:14px; border-radius:12px; background:#eff6ff; color:#1e3a8a;">
+        Esta preferencia prepara tu cuenta para el servicio de resumen diario. El envío
+        se habilitará cuando el servicio de notificaciones esté disponible.
+      </p>
+
+      <p>Puedes ver el resumen sin activarlo ni enviar ningún correo.</p>
+
+      <div class="actions">
+        <button type="submit">Guardar preferencias</button>
+        <a class="btn" href="{% url 'daily_digest_preview' %}">Vista previa del resumen</a>
+        <a class="btn" href="{% url 'dashboard' %}">Volver a Hoy</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

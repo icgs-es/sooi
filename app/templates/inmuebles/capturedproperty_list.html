@@ -4,6 +4,503 @@
 {% block section_title %}Bandeja de Captación{% endblock %}
 
 {% block content %}
+  <style>
+    .capture-filter-form {
+      display:flex;
+      gap:10px;
+      align-items:end;
+      flex-wrap:wrap;
+    }
+
+    .capture-filter-form label {
+      display:block;
+      font-weight:700;
+      margin-bottom:4px;
+      font-size:.78rem;
+      color:#334155;
+    }
+
+    .capture-filter-form select,
+    .capture-filter-form input {
+      padding:7px 9px;
+      border:1px solid #dbe3ee;
+      border-radius:9px;
+      font-size:.82rem;
+    }
+
+    .capture-bulk-bar {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+      padding:9px 10px;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      background:#f8fafc;
+      font-size:.82rem;
+    }
+
+    .capture-bulk-actions {
+      display:inline-flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .capture-bulk-bar .btn {
+      padding:8px 12px;
+      font-size:.80rem;
+      line-height:1.1;
+    }
+
+    .sooi-capture-table {
+      width:100%;
+      border-collapse:collapse;
+      table-layout:fixed;
+      font-size:.78rem;
+      line-height:1.2;
+    }
+
+    .sooi-capture-table col.col-check { width:40px; }
+    .sooi-capture-table col.col-date { width:100px; }
+    .sooi-capture-table col.col-control { width:155px; }
+    .sooi-capture-table col.col-actions { width:118px; }
+
+    .sooi-capture-table th {
+      padding:8px 8px;
+      text-align:left;
+      border-bottom:1px solid #dbe3ee;
+      white-space:nowrap;
+      color:#64748b;
+      font-size:.72rem;
+      text-transform:uppercase;
+      letter-spacing:.02em;
+      font-weight:700;
+    }
+
+    .sooi-capture-table td {
+      padding:10px 8px;
+      border-bottom:1px solid #eef2f7;
+      vertical-align:top;
+    }
+
+    .capture-date {
+      white-space:nowrap;
+      color:#475569;
+      font-size:.74rem;
+      padding-top:12px;
+    }
+
+    .capture-search-pill {
+      display:inline-flex;
+      align-items:center;
+      max-width:100%;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:.70rem;
+      font-weight:700;
+      border:1px solid #cbd5e1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .capture-property-block {
+      min-width:0;
+    }
+
+    .capture-title-link {
+      display:block;
+      max-width:100%;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      color:#0f172a;
+      text-decoration:none;
+      font-weight:600;
+      font-size:.90rem;
+      line-height:1.15;
+      margin-bottom:3px;
+    }
+
+    .capture-title-link:hover {
+      text-decoration:underline;
+    }
+
+    .capture-location {
+      color:#334155;
+      font-size:.74rem;
+      line-height:1.15;
+      margin-bottom:2px;
+    }
+
+    .capture-line2 {
+      display:block;
+      max-width:100%;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      color:#475569;
+      font-size:.72rem;
+      line-height:1.15;
+    }
+
+    .capture-meta {
+      color:#64748b;
+      font-size:.72rem;
+      line-height:1.15;
+    }
+
+    .capture-source {
+      font-size:.80rem;
+      color:#0f172a;
+      line-height:1.15;
+    }
+
+    .capture-source-meta {
+      margin-top:2px;
+      color:#64748b;
+      font-size:.72rem;
+      line-height:1.15;
+    }
+
+    .capture-price {
+      white-space:nowrap;
+      font-weight:700;
+      color:#0f172a;
+      font-size:.88rem;
+      padding-top:12px;
+    }
+
+    .capture-control {
+      display:flex;
+      gap:4px;
+      flex-wrap:wrap;
+      max-width:100%;
+      padding-top:4px;
+    }
+
+    .capture-mini-badge,
+    .sooi-capture-table .sooi-badge {
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      padding:2px 6px;
+      font-size:.66rem;
+      font-weight:700;
+      line-height:1.2;
+      white-space:nowrap;
+    }
+
+    .capture-mini-badge {
+      border:1px solid #cbd5e1;
+      background:#f8fafc;
+      color:#334155;
+    }
+
+    .capture-mini-badge--warning {
+      border-color:#fdba74;
+      background:#fff7ed;
+      color:#9a3412;
+    }
+
+    .capture-mini-badge--ok {
+      border-color:#bbf7d0;
+      background:#ecfdf5;
+      color:#047857;
+    }
+
+    .capture-mini-badge--ia {
+      border-color:#c4b5fd;
+      background:#f5f3ff;
+      color:#6d28d9;
+    }
+
+    /* SOOI_CAPTACION_BANDEJA_LAYOUT_FIX_V1 */
+    .capture-row-actions {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      width:100%;
+      min-width:0;
+      white-space:normal;
+      padding-top:4px;
+    }
+
+    .capture-row-actions .conversion-blocked-state {
+      flex:1 1 auto;
+      min-width:0;
+      max-width:100%;
+      white-space:normal;
+      overflow-wrap:anywhere;
+    }
+
+    .capture-row-actions .action-menu {
+      flex:0 0 auto;
+      margin-left:auto;
+    }
+
+    .sooi-capture-table td {
+      min-width:0;
+    }
+
+    .sooi-capture-table td:nth-child(3),
+    .sooi-capture-table .property-summary,
+    .sooi-capture-table .property-summary__main,
+    .sooi-capture-table .property-summary__identity {
+      min-width:0;
+      max-width:100%;
+    }
+
+    .capture-row-action,
+    .capture-row-actions button,
+    .action-menu__trigger {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      height:30px;
+      min-width:30px;
+      padding:0 12px;
+      border-radius:10px;
+      border:1px solid #cbd5e1;
+      background:#fff;
+      color:#334155;
+      font-size:.74rem;
+      font-weight:700;
+      text-decoration:none;
+      cursor:pointer;
+      font-family:inherit;
+      line-height:1;
+    }
+
+    .capture-row-action--primary {
+      border-color:#bfdbfe;
+      background:#eaf3ff;
+      color:#1d4ed8;
+    }
+
+    .capture-row-action:hover,
+    .action-menu__trigger:hover {
+      background:#f8fafc;
+      text-decoration:none;
+    }
+
+    .action-menu {
+      display:inline-block;
+      position:relative;
+    }
+
+    .action-menu__trigger {
+      padding:0 10px;
+      font-weight:800;
+    }
+
+    .action-menu__trigger::-webkit-details-marker {
+      display:none;
+    }
+
+    .action-menu__panel {
+      position:absolute;
+      right:0;
+      z-index:20;
+      min-width:170px;
+      margin-top:6px;
+      padding:6px;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      background:#fff;
+      box-shadow:0 16px 28px rgba(15,23,42,.16);
+    }
+
+    .action-menu__item {
+      display:block;
+      width:100%;
+      padding:8px 9px;
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      text-align:left;
+      font-size:.76rem;
+      font-weight:600;
+      color:#334155;
+      text-decoration:none;
+      cursor:pointer;
+      font-family:inherit;
+    }
+
+    .action-menu__item:hover {
+      background:#f1f5f9;
+      text-decoration:none;
+    }
+
+    .action-menu__item--danger {
+      color:#b91c1c;
+    }
+
+    .action-menu__item--primary {
+      color:#1d4ed8;
+    }
+
+
+    /* SOOI_CAPTACION_BANDEJA_LAYOUT_FIX_V1_1 */
+
+    /*
+     * Compactación específica de la bandeja.
+     * El CSS global usa padding !important en td/th,
+     * por eso estas reglas deben sobrescribirlo explícitamente.
+     */
+    .sooi-capture-table th {
+      padding:8px 8px !important;
+    }
+
+    .sooi-capture-table td {
+      padding:7px 8px !important;
+      line-height:1.15;
+    }
+
+    .capture-date {
+      padding-top:3px;
+      font-size:.70rem;
+    }
+
+    /*
+     * Resumen del inmueble compacto:
+     * identidad arriba y metadatos distribuidos debajo.
+     */
+    .sooi-capture-table .property-summary--compact {
+      gap:8px;
+      align-items:flex-start;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__main {
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:2px 9px;
+      min-width:0;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__identity {
+      flex:1 1 100%;
+      min-width:0;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__title {
+      font-size:.80rem;
+      line-height:1.08;
+      margin:0 0 1px;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__location {
+      font-size:.69rem;
+      line-height:1.08;
+      margin:0;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__facts,
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__states,
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__context {
+      margin-top:0;
+      line-height:1.08;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__facts,
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__states {
+      flex:0 1 auto;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__context {
+      flex:1 1 260px;
+      min-width:0;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__facts,
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__states,
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__context {
+      font-size:.68rem;
+    }
+
+    /*
+     * Precio compacto a la derecha.
+     */
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__price {
+      padding-top:1px;
+      min-width:72px;
+      text-align:right;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__price span {
+      display:none;
+    }
+
+    .sooi-capture-table
+    .property-summary--compact
+    .property-summary__price strong {
+      margin:0;
+      font-size:.80rem;
+      line-height:1.1;
+    }
+
+    /*
+     * Control compacto.
+     */
+    .capture-control {
+      gap:3px;
+      padding-top:0;
+      align-content:flex-start;
+    }
+
+    .capture-mini-badge,
+    .sooi-capture-table .sooi-badge {
+      padding:2px 5px;
+      font-size:.61rem;
+      line-height:1.1;
+    }
+
+
+    @media (max-width:1200px) {
+      .sooi-capture-table {
+        min-width:0;
+      }
+
+      .sooi-capture-table col.col-date { width:90px; }
+      .sooi-capture-table col.col-control { width:145px; }
+      .sooi-capture-table col.col-actions { width:112px; }
+    }
+  </style>
+
   <div class="page-card">
     <h1>Bandeja de Captación</h1>
     <p>Entrada operativa de inmuebles captados. Aquí comienza el filtro real entre ruido y oportunidad.</p>
@@ -51,11 +548,11 @@
     </div>
   </div>
 
-  <div class="page-card" style="margin-top: 18px;">
-    <form method="get" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+  <div class="page-card" style="margin-top:18px;">
+    <form method="get" class="capture-filter-form">
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Búsqueda</label>
-        <select name="search_profile_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:220px;">
+        <label>Búsqueda</label>
+        <select name="search_profile_id" style="min-width:220px;">
           <option value="">Todas</option>
           {% for search in available_search_profiles %}
             <option value="{{ search.id }}" {% if current_search_profile_id == search.id|stringformat:"s" %}selected{% endif %}>
@@ -66,9 +563,9 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Estado</label>
-        <select name="status" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
-          <option value="">Todos</option>
+        <label>Estado</label>
+        <select name="status">
+          <option value="">Operativas sin oportunidad</option>
           {% for value, label in status_choices %}
             <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
@@ -76,8 +573,8 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Operación</label>
-        <select name="operation_type" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Operación</label>
+        <select name="operation_type">
           <option value="">Todas</option>
           {% for value, label in operation_type_choices %}
             <option value="{{ value }}" {% if current_operation_type == value %}selected{% endif %}>{{ label }}</option>
@@ -86,8 +583,8 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Tipología</label>
-        <select name="property_type" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Tipología</label>
+        <select name="property_type">
           <option value="">Todas</option>
           {% for value, label in property_type_choices %}
             <option value="{{ value }}" {% if current_property_type == value %}selected{% endif %}>{{ label }}</option>
@@ -96,29 +593,23 @@
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Método</label>
-        <select name="entry_mode" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Método</label>
+        <select name="entry_mode">
           <option value="">Todos</option>
           {% for value, label in entry_mode_choices %}
             <option value="{{ value }}" {% if current_entry_mode == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
-      
+
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Ubicación</label>
-        <input
-          type="text"
-          name="location"
-          value="{{ current_location_query }}"
-          placeholder="Ej. Pozoblanco, Hinojosa, calle..."
-          style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px; min-width:240px;"
-        >
+        <label>Ubicación</label>
+        <input type="text" name="location" value="{{ current_location_query }}" placeholder="Ej. Pozoblanco, Hinojosa..." style="min-width:220px;">
       </div>
 
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:6px;">Fuente</label>
-        <select name="source_id" style="padding:10px 12px; border:1px solid #dbe3ee; border-radius:10px;">
+        <label>Fuente</label>
+        <select name="source_id">
           <option value="">Todas</option>
           {% for source in available_sources %}
             <option value="{{ source.id }}" {% if current_source_id == source.id|stringformat:"s" %}selected{% endif %}>
@@ -135,177 +626,239 @@
     </form>
   </div>
 
-  <div class="page-card" style="margin-top: 18px;">
+  <div class="page-card" style="margin-top:18px;">
     {% if captured_properties %}
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse: collapse;">
+      <form id="capture-bulk-form" method="post" action="/app/captacion/accion-masiva/eliminar/" class="capture-bulk-bar">
+        {% csrf_token %}
+        <input type="hidden" name="selected_ids" id="capture-bulk-selected-ids">
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+        <div style="font-weight:800;">
+          Selección masiva
+          <span id="capture-bulk-counter" style="font-weight:600;color:#64748b;margin-left:8px;">0 seleccionadas</span>
+        </div>
+
+        <div class="capture-bulk-actions">
+          <button class="btn" type="submit" formaction="/app/captacion/listado/" formtarget="_blank" onclick="return capturePrepareBulkList();">
+            Listado seleccionadas
+          </button>
+
+          <button class="btn" type="submit" formaction="/app/captacion/informe/" formtarget="_blank" onclick="return capturePrepareBulkReport();">
+            Informe seleccionadas
+          </button>
+
+          <button class="btn btn-danger" type="submit" onclick="return capturePrepareBulkDelete();">
+            Eliminar seleccionadas
+          </button>
+        </div>
+      </form>
+
+      <div class="sooi-responsive-table-wrap capture-table-wrap">
+        <table class="sooi-table sooi-capture-table">
+          <colgroup>
+            <col class="col-check">
+            <col class="col-date">
+            <col>
+            <col class="col-control">
+            <col class="col-actions">
+          </colgroup>
+
           <thead>
-            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
-              <th style="padding:12px;">Fecha</th>
-              <th style="padding:12px;">Búsqueda</th>
-              <th style="padding:12px;">Título</th>
-              <th style="padding:12px;">Método</th>
-              <th style="padding:12px;">Fuente</th>
-              <th style="padding:12px;">Ubicación</th>
-              <th style="padding:12px;">Operación</th>
-              <th style="padding:12px;">Tipo</th>
-              <th style="padding:12px;">Precio</th>
-              <th style="padding:12px;">Estado</th>
-              <th style="padding:12px;">Interés</th>
-              <th style="padding:12px;">Acciones</th>
+            <tr>
+              <th><input type="checkbox" id="capture-bulk-master" aria-label="Seleccionar captaciones visibles"></th>
+              <th>Fecha</th>
+              <th>Inmueble</th>
+              <th>Control</th>
+              <th>Acciones</th>
             </tr>
           </thead>
+
           <tbody>
             {% for item in captured_properties %}
-              <tr style="border-bottom:1px solid #eef2f7; vertical-align:top;">
-                <td style="padding:12px; white-space:nowrap;">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
-                <td style="padding:12px;">
-                  {% if item.search_profile %}
-                    <span style="
-                      display:inline-flex;
-                      align-items:center;
-                      padding:4px 9px;
-                      border-radius:999px;
-                      font-size:12px;
-                      font-weight:700;
-                      border:1px solid #cbd5e1;
-                      {% if item.search_profile.color == 'blue' %}background:#eff6ff; color:#1d4ed8;{% endif %}
-                      {% if item.search_profile.color == 'green' %}background:#ecfdf5; color:#047857;{% endif %}
-                      {% if item.search_profile.color == 'orange' %}background:#fff7ed; color:#c2410c;{% endif %}
-                      {% if item.search_profile.color == 'purple' %}background:#f5f3ff; color:#6d28d9;{% endif %}
-                      {% if item.search_profile.color == 'red' %}background:#fef2f2; color:#b91c1c;{% endif %}
-                      {% if item.search_profile.color == 'teal' %}background:#f0fdfa; color:#0f766e;{% endif %}
-                    ">
-                      {{ item.search_profile.name }}
+              <tr>
+                <td>
+                  <input type="checkbox" class="capture-bulk-checkbox" value="{{ item.id }}" {% if item.existing_opportunity %}disabled title="No se puede eliminar: ya tiene oportunidad"{% endif %} aria-label="Seleccionar captación {{ item.id }}">
+                </td>
+
+                <td class="capture-date">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
+
+                <td>
+                  {% url "capturedproperty_detail" item.id as capture_detail_url %}
+                  {% include "inmuebles/_property_summary.html" with capture=item compact=True show_price=True property_url=capture_detail_url %}
+                </td>
+
+                <td>
+                  <div class="capture-control">
+                    <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">
+                      Captación: {{ item.get_status_display }}
                     </span>
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-                <td style="padding:12px; font-weight:600;">
-                  <a href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}" style="color:inherit; text-decoration:none;">
-                    {{ item.title }}
-                  </a>
 
-                  {% if item.possible_duplicate %}
-                    <div style="margin-top:6px;">
-                      <span style="
-                        display:inline-flex;
-                        align-items:center;
-                        padding:4px 8px;
-                        border-radius:999px;
-                        background:#fff7ed;
-                        color:#9a3412;
-                        font-size:12px;
-                        font-weight:700;
-                        border:1px solid #fdba74;
-                      ">
-                        Posible duplicado
-                      </span>
-                    </div>
-                  {% endif %}
-                </td>
-                <td style="padding:12px;">
-                  <span class="sooi-badge sooi-badge--method sooi-badge--{{ item.entry_mode }}">
-                    {{ item.get_entry_mode_display }}
-                  </span>
-                </td>
-                <td style="padding:12px;">{{ item.source.name }}</td>
-                <td style="padding:12px;">
-                  {% if item.municipality or item.province %}
-                    {{ item.municipality }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-                <td style="padding:12px;">{{ item.get_operation_type_display }}</td>
-                <td style="padding:12px;">{{ item.get_property_type_display }}</td>
-                <td style="padding:12px; white-space:nowrap; font-weight:700;">
-                  {% if item.price %}{{ item.price }} €{% else %}—{% endif %}
-                </td>
-                <td style="padding:12px;">
-                  <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">
-                    {{ item.get_status_display }}
-                  </span>
-                </td>
-                <td style="padding:12px;">
-                  {% if item.is_interesting %}
-                    <span class="sooi-badge sooi-badge--interest-yes">Sí</span>
-                  {% else %}
-                    <span class="sooi-badge sooi-badge--interest-no">No</span>
-                  {% endif %}
-                </td>
-                <td style="padding:12px; white-space:nowrap;">
-                  <div class="capture-row-actions">
-                    <a class="capture-row-action" href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}">
-                      Abrir
-                    </a>
-
-                    {% if not item.is_interesting %}
-                      <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <button class="capture-row-action" type="submit">Interesante</button>
-                      </form>
-                    {% else %}
-                      <span class="capture-row-action-spacer" aria-hidden="true"></span>
+                    {% if item.is_interesting %}
+                      <span class="capture-mini-badge capture-mini-badge--ok">Interesante</span>
                     {% endif %}
 
-                    {% if item.existing_opportunity %}
-                      <a class="capture-row-action capture-row-action--primary" href="/app/oportunidades/{{ item.existing_opportunity.id }}/">
-                        Oportunidad
-                      </a>
-                    {% else %}
-                      <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
-                        {% csrf_token %}
-                        <button class="capture-row-action capture-row-action--primary" type="submit">Convertir</button>
-                      </form>
+                    {% if item.ai_score %}
+                      <span class="capture-mini-badge capture-mini-badge--ia">IA {{ item.ai_score }}</span>
+                    {% endif %}
+
+                    {% if item.ai_signals %}
+                      <span class="capture-mini-badge capture-mini-badge--ia">Señales IA</span>
+                    {% endif %}
+
+                    <span class="capture-mini-badge">{{ item.get_entry_mode_display }}</span>
+
+                    {# SOOI_LISTADOS_NORMALIZATION_V1_4_1 #}
+                    {% if item.availability_verification_state == "unknown" %}
+                      <span class="conversion-blocked-state capture-governance-note capture-governance-note--warning">
+                        Verifica disponibilidad
+                      </span>
+                    {% elif item.availability_verification_state == "unavailable" %}
+                      <span class="conversion-blocked-state conversion-blocked-state--unavailable capture-governance-note capture-governance-note--danger">
+                        No disponible · No convertible
+                      </span>
+                    {% elif item.status == "validated" and not item.existing_opportunity %}
+                      <span class="conversion-blocked-state capture-governance-note">
+                        Requiere revisión
+                      </span>
                     {% endif %}
                   </div>
+                </td>
 
-                  <details class="action-menu">
-                    <summary class="action-menu__trigger">⋯</summary>
+                <td>
+                  <div class="capture-row-actions">
+                    <a
+                      class="sooi-row-primary-action"
+                      href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}"
+                    >Ver ficha</a>
 
-                    <div class="action-menu__panel">
-                      <a class="action-menu__item" href="/app/captacion/{{ item.id }}/?next={{ request.get_full_path|urlencode }}">Abrir</a>
+                    <details class="action-menu">
+                      <summary class="action-menu__trigger">⋯</summary>
 
-                      {% if not item.is_interesting %}
-                        <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
-                          {% csrf_token %}
-                          <button class="action-menu__item" type="submit">Interesante</button>
-                        </form>
-                      {% endif %}
+                      <div class="action-menu__panel">
+                        {% if item.existing_opportunity %}
+                          <a
+                            class="action-menu__item action-menu__item--primary"
+                            href="/app/oportunidades/{{ item.existing_opportunity.id }}/"
+                          >Ver oportunidad</a>
+                        {% elif item.status != "discarded" and item.status != "validated" and item.availability_verification_state != "unknown" and item.availability_verification_state != "unavailable" %}
+                          <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
+                            {% csrf_token %}
+                            <button class="action-menu__item action-menu__item--primary" type="submit">
+                              Convertir en oportunidad
+                            </button>
+                          </form>
+                        {% endif %}
+                        <button
+                          type="button"
+                          class="action-menu__item action-menu__availability-trigger"
+                          data-availability-dialog="availability-dialog-{{ item.id }}"
+                        >
+                          Cambiar disponibilidad
+                        </button>
 
-                      {% if item.status != "in_review" %}
-                        <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/">
-                          {% csrf_token %}
-                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                          <button class="action-menu__item" type="submit">En revisión</button>
-                        </form>
-                      {% endif %}
 
-                      {% if not item.existing_opportunity %}
-                        <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
-                          {% csrf_token %}
-                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                          <button class="action-menu__item action-menu__item--danger" type="submit">
-                            Eliminar
-                          </button>
-                        </form>
-                      {% endif %}
-                      
-                      {% if item.existing_opportunity %}
-                        <a class="action-menu__item action-menu__item--primary" href="/app/oportunidades/{{ item.existing_opportunity.id }}/">
-                          Ver oportunidad
-                        </a>
-                      {% else %}
-                        <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
-                          {% csrf_token %}
-                          <button class="action-menu__item action-menu__item--primary" type="submit">Convertir</button>
-                        </form>
-                      {% endif %}
-                    </div>
-                  </details>
+                        {% if not item.is_interesting %}
+                          <form method="post" action="/app/captacion/{{ item.id }}/marcar-interesante/">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="action-menu__item" type="submit">Interesante</button>
+                          </form>
+                        {% endif %}
+
+                        {% if item.status != "in_review" %}
+                          <form method="post" action="/app/captacion/{{ item.id }}/marcar-revision/">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="action-menu__item" type="submit">En revisión</button>
+                          </form>
+                        {% endif %}
+
+                        {% if not item.existing_opportunity %}
+                          <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="action-menu__item action-menu__item--danger" type="submit">Eliminar</button>
+                          </form>
+                        {% endif %}
+
+                      </div>
+                    </details>
+                  </div>
+
+                  {# SOOI_CAPTACION_AVAILABILITY_DIALOG_V1_5 #}
+                  <dialog
+                    id="availability-dialog-{{ item.id }}"
+                    class="sooi-availability-dialog"
+                    aria-labelledby="availability-title-{{ item.id }}"
+                  >
+                    <form
+                      method="post"
+                      action="/app/captacion/{{ item.id }}/verificar-disponibilidad/"
+                      class="sooi-availability-dialog__form"
+                    >
+                      {% csrf_token %}
+
+                      <input
+                        type="hidden"
+                        name="next"
+                        value="{{ request.get_full_path }}"
+                      >
+
+                      <input
+                        type="hidden"
+                        name="availability_verification_note"
+                        value="{{ item.availability_verification_note }}"
+                      >
+
+                      <div class="sooi-availability-dialog__header">
+                        <strong id="availability-title-{{ item.id }}">
+                          Cambiar disponibilidad
+                        </strong>
+
+                        <button
+                          type="button"
+                          class="sooi-availability-dialog__close"
+                          data-dialog-close
+                          aria-label="Cerrar"
+                        >×</button>
+                      </div>
+
+                      <p class="sooi-availability-dialog__help">
+                        Selecciona el estado real de disponibilidad del inmueble.
+                      </p>
+
+                      <div class="sooi-availability-options">
+                        {% for value, label in availability_choices %}
+                          <label class="sooi-availability-option">
+                            <input
+                              type="radio"
+                              name="availability_verification_state"
+                              value="{{ value }}"
+                              {% if item.availability_verification_state == value %}checked{% endif %}
+                            >
+                            <span>{{ label }}</span>
+                          </label>
+                        {% endfor %}
+                      </div>
+
+                      <div class="sooi-availability-dialog__actions">
+                        <button
+                          type="button"
+                          class="sooi-dialog-button sooi-dialog-button--secondary"
+                          data-dialog-close
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="submit"
+                          class="sooi-dialog-button sooi-dialog-button--primary"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </form>
+                  </dialog>
                 </td>
               </tr>
             {% endfor %}
@@ -313,10 +866,909 @@
         </table>
       </div>
     {% else %}
-      <p style="margin-top:16px; color:#64748b;">Todavía no hay inmuebles captados para mostrar.</p>
+      <p style="margin-top:16px;color:#64748b;">Todavía no hay inmuebles captados para mostrar.</p>
       <div class="actions">
         <a class="btn btn-primary" href="/app/captacion/manual/">Crear primer inmueble</a>
       </div>
     {% endif %}
   </div>
+
+  <script>
+    (function () {
+      const master = document.getElementById("capture-bulk-master");
+      const boxes = Array.from(document.querySelectorAll(".capture-bulk-checkbox:not(:disabled)"));
+      const counter = document.getElementById("capture-bulk-counter");
+      const hidden = document.getElementById("capture-bulk-selected-ids");
+
+      function selectedIds() {
+        return boxes.filter(box => box.checked).map(box => box.value);
+      }
+
+      function updateCounter() {
+        const count = selectedIds().length;
+
+        if (counter) {
+          counter.textContent = count + (count === 1 ? " seleccionada" : " seleccionadas");
+        }
+
+        if (master) {
+          master.checked = boxes.length > 0 && count === boxes.length;
+          master.indeterminate = count > 0 && count < boxes.length;
+        }
+      }
+
+      function prepareSelection(alertText) {
+        const ids = selectedIds();
+
+        if (!ids.length) {
+          alert(alertText || "Selecciona al menos una captación.");
+          return false;
+        }
+
+        hidden.value = ids.join(",");
+        return ids;
+      }
+
+      if (master) {
+        master.addEventListener("change", function () {
+          boxes.forEach(box => {
+            box.checked = master.checked;
+          });
+          updateCounter();
+        });
+      }
+
+      boxes.forEach(box => {
+        box.addEventListener("change", updateCounter);
+      });
+
+      window.capturePrepareBulkList = function () {
+        return !!prepareSelection("Selecciona al menos una captación para generar el listado.");
+      };
+
+      window.capturePrepareBulkReport = function () {
+        return !!prepareSelection("Selecciona al menos una captación para generar el informe.");
+      };
+
+      window.capturePrepareBulkDelete = function () {
+        const ids = prepareSelection("Selecciona al menos una captación sin oportunidad asociada.");
+
+        if (!ids) {
+          return false;
+        }
+
+        return confirm("Vas a eliminar " + ids.length + " captación(es). Esta acción no se puede deshacer.");
+      };
+
+      updateCounter();
+    })();
+  </script>
+
+
+  <style>
+    /* SOOI_LISTADOS_NORMALIZATION_V1_4 */
+
+    /*
+     * Patrón único:
+     * [ Ver ficha ] [ ... ]
+     */
+
+    .sooi-row-primary-action {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      box-sizing:border-box;
+      height:26px;
+      padding:0 7px;
+      border:1px solid #dbe3ee;
+      border-radius:8px;
+      background:#fff;
+      color:#334155;
+      font-size:10px;
+      font-weight:700;
+      line-height:1;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .sooi-row-primary-action:hover {
+      background:#f8fafc;
+      border-color:#cbd5e1;
+      text-decoration:none;
+    }
+
+    .capture-row-actions,
+    .opp-table__actions-cell {
+      display:flex;
+      align-items:center;
+      gap:4px;
+      min-width:0;
+      white-space:nowrap;
+    }
+
+    .action-menu {
+      position:relative !important;
+      display:inline-block !important;
+      flex:0 0 auto;
+      margin:0 !important;
+    }
+
+    .action-menu summary {
+      list-style:none;
+    }
+
+    .action-menu summary::-webkit-details-marker {
+      display:none;
+    }
+
+    .action-menu__trigger {
+      display:block !important;
+      box-sizing:border-box !important;
+      width:26px !important;
+      min-width:26px !important;
+      height:26px !important;
+      padding:0 !important;
+      border:1px solid #dbe3ee !important;
+      border-radius:8px !important;
+      background:#fff !important;
+      color:#475569 !important;
+      font-size:15px !important;
+      font-weight:700 !important;
+      line-height:24px !important;
+      text-align:center !important;
+      cursor:pointer;
+    }
+
+    .action-menu__trigger:hover {
+      background:#f8fafc !important;
+      border-color:#cbd5e1 !important;
+    }
+
+    .action-menu__panel {
+      display:none !important;
+      position:absolute !important;
+      top:calc(100% + 4px) !important;
+      right:0 !important;
+      left:auto !important;
+      transform:none !important;
+      z-index:600 !important;
+
+      box-sizing:border-box !important;
+      width:190px !important;
+      min-width:190px !important;
+      max-width:190px !important;
+
+      padding:5px !important;
+      flex-direction:column !important;
+      align-items:stretch !important;
+      gap:0 !important;
+
+      border:1px solid #dbe3ee !important;
+      border-radius:9px !important;
+      background:#fff !important;
+      box-shadow:0 12px 26px rgba(15,23,42,.14) !important;
+      white-space:normal !important;
+    }
+
+    .action-menu[open] > .action-menu__panel {
+      display:flex !important;
+    }
+
+    .action-menu__panel form {
+      display:block !important;
+      width:100% !important;
+      margin:0 !important;
+    }
+
+    .action-menu__item,
+    .action-menu__panel button.action-menu__item {
+      display:block !important;
+      box-sizing:border-box !important;
+      width:100% !important;
+      height:auto !important;
+      min-height:0 !important;
+
+      margin:0 !important;
+      padding:6px 7px !important;
+
+      border:0 !important;
+      border-radius:6px !important;
+      background:transparent !important;
+
+      color:#334155 !important;
+      font-size:10.5px !important;
+      font-weight:600 !important;
+      line-height:1.25 !important;
+      text-align:left !important;
+      white-space:normal !important;
+      text-decoration:none !important;
+    }
+
+    .action-menu__item:hover,
+    .action-menu__panel button.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    .action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+
+    .action-menu__panel label {
+      margin:4px 3px 2px !important;
+      padding:0 !important;
+      color:#64748b !important;
+      font-size:9.5px !important;
+      font-weight:700 !important;
+    }
+
+    .action-menu__panel select {
+      box-sizing:border-box !important;
+      width:100% !important;
+      margin:2px 0 4px !important;
+      padding:5px 6px !important;
+      border:1px solid #cbd5e1 !important;
+      border-radius:6px !important;
+      background:#fff !important;
+      font-size:10px !important;
+    }
+  </style>
+
+  <style>
+    /* Captación · columna de acciones exclusivamente operativa */
+    .sooi-capture-table col.col-actions {
+      width:118px !important;
+    }
+
+    .capture-row-actions {
+      justify-content:flex-start !important;
+      width:100% !important;
+      padding-top:0 !important;
+    }
+
+    @media (max-width:1200px) {
+      .sooi-capture-table col.col-actions {
+        width:112px !important;
+      }
+    }
+  </style>
+
+
+  <style>
+    /* SOOI_LISTADOS_NORMALIZATION_V1_4_1 */
+
+    /*
+     * La gobernanza pertenece a CONTROL.
+     * ACCIONES permanece exclusivamente operativa:
+     * [ Ver ficha ] [ ... ]
+     */
+    .capture-control .capture-governance-note {
+      display:block !important;
+      flex:1 0 100% !important;
+      box-sizing:border-box !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      margin:1px 0 0 !important;
+      padding:0 !important;
+
+      border:0 !important;
+      background:transparent !important;
+
+      color:#64748b !important;
+      font-size:9.5px !important;
+      font-weight:600 !important;
+      line-height:1.12 !important;
+
+      white-space:normal !important;
+      word-break:normal !important;
+      overflow-wrap:normal !important;
+    }
+
+    .capture-control .capture-governance-note--warning {
+      color:#92400e !important;
+    }
+
+    .capture-control .capture-governance-note--danger {
+      color:#b91c1c !important;
+    }
+  </style>
+
+  <script>
+    /* SOOI_LISTADOS_NORMALIZATION_V1_4_BEHAVIOR */
+    (function () {
+      const menus = Array.from(
+        document.querySelectorAll("details.action-menu")
+      );
+
+      function closeAll(except) {
+        menus.forEach(function (menu) {
+          if (menu !== except) {
+            menu.open = false;
+          }
+        });
+      }
+
+      menus.forEach(function (menu) {
+        menu.addEventListener("toggle", function () {
+          if (menu.open) {
+            closeAll(menu);
+          }
+        });
+      });
+
+      document.addEventListener("click", function (event) {
+        if (!event.target.closest("details.action-menu")) {
+          closeAll(null);
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeAll(null);
+        }
+      });
+    })();
+  </script>
+
+
+  <style>
+    /* SOOI_ACTION_MENU_PANEL_FIX_V1_4_2 */
+
+    /*
+     * Normalización fuerte del contenido del dropdown.
+     * Evita herencias de .page-card select/button/form.
+     */
+    .action-menu__panel {
+      width:210px !important;
+      min-width:210px !important;
+      max-width:210px !important;
+
+      padding:7px !important;
+      overflow:visible !important;
+
+      flex-direction:column !important;
+      align-items:stretch !important;
+      justify-content:flex-start !important;
+    }
+
+    .action-menu__panel > * {
+      position:static !important;
+      float:none !important;
+      flex:none !important;
+      width:100% !important;
+      max-width:100% !important;
+      box-sizing:border-box !important;
+    }
+
+    .action-menu__panel form {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      margin:0 !important;
+      padding:0 !important;
+
+      flex:none !important;
+    }
+
+    /* Separación real entre bloques operativos */
+    .action-menu__panel form + form,
+    .action-menu__panel form + a,
+    .action-menu__panel a + form {
+      margin-top:3px !important;
+      padding-top:3px !important;
+      border-top:1px solid #f1f5f9 !important;
+    }
+
+    /*
+     * Select: eliminar el min-height global de page-card.
+     */
+    .action-menu__panel select {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      height:30px !important;
+      min-height:30px !important;
+      max-height:30px !important;
+
+      margin:2px 0 5px !important;
+      padding:3px 24px 3px 7px !important;
+
+      border:1px solid #cbd5e1 !important;
+      border-radius:6px !important;
+      background-color:#fff !important;
+
+      font-size:10.5px !important;
+      line-height:1.15 !important;
+    }
+
+    .action-menu__panel label {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      width:100% !important;
+      min-height:0 !important;
+
+      margin:0 0 2px !important;
+      padding:2px 1px !important;
+
+      color:#64748b !important;
+      font-size:9.5px !important;
+      line-height:1.15 !important;
+      font-weight:700 !important;
+    }
+
+    /*
+     * Botones: neutralizar por completo
+     * .page-card button[type=submit].
+     */
+    .page-card .action-menu__panel button.action-menu__item,
+    .action-menu__panel button.action-menu__item,
+    .action-menu__panel a.action-menu__item {
+      position:static !important;
+      display:block !important;
+      float:none !important;
+
+      box-sizing:border-box !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+
+      height:auto !important;
+      min-height:28px !important;
+      max-height:none !important;
+
+      margin:0 !important;
+      padding:6px 8px !important;
+
+      border:0 !important;
+      border-radius:6px !important;
+
+      font-size:10.5px !important;
+      line-height:1.25 !important;
+      text-align:left !important;
+
+      white-space:normal !important;
+      overflow:visible !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item {
+      background:transparent !important;
+      color:#334155 !important;
+      justify-content:flex-start !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item:hover,
+    .action-menu__panel a.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+  </style>
+
+
+  <style>
+    /* SOOI_ACTION_MENU_READABILITY_V1_4_3 */
+
+    /*
+     * Más aire, jerarquía y legibilidad.
+     * Conserva el esquema visual de V1.4.2.
+     */
+    .action-menu__panel {
+      width:224px !important;
+      min-width:224px !important;
+      max-width:224px !important;
+
+      padding:10px !important;
+
+      max-height:min(420px, calc(100vh - 24px)) !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+
+      border-radius:11px !important;
+      box-shadow:0 14px 32px rgba(15,23,42,.16) !important;
+    }
+
+    /*
+     * Cada formulario es un bloque vertical real.
+     */
+    .action-menu__panel form {
+      display:flex !important;
+      flex-direction:column !important;
+      align-items:stretch !important;
+      gap:4px !important;
+
+      width:100% !important;
+      padding:0 !important;
+      margin:0 !important;
+    }
+
+    /*
+     * Separación clara entre acciones.
+     */
+    .action-menu__panel form + form,
+    .action-menu__panel form + a,
+    .action-menu__panel a + form,
+    .action-menu__panel a + a {
+      margin-top:6px !important;
+      padding-top:6px !important;
+      border-top:1px solid #eef2f7 !important;
+    }
+
+    /*
+     * Etiqueta de Disponibilidad.
+     */
+    .action-menu__panel label {
+      display:block !important;
+      margin:0 !important;
+      padding:1px 2px 2px !important;
+
+      color:#64748b !important;
+      font-size:10.5px !important;
+      font-weight:700 !important;
+      line-height:1.25 !important;
+    }
+
+    /*
+     * Selector más alto y mucho más legible.
+     */
+    .page-card .action-menu__panel select,
+    .action-menu__panel select {
+      display:block !important;
+
+      width:100% !important;
+      height:34px !important;
+      min-height:34px !important;
+      max-height:34px !important;
+
+      margin:0 0 2px !important;
+      padding:5px 28px 5px 8px !important;
+
+      border:1px solid #cbd5e1 !important;
+      border-radius:7px !important;
+
+      background:#fff !important;
+      color:#334155 !important;
+
+      font-size:11.5px !important;
+      font-weight:500 !important;
+      line-height:1.2 !important;
+    }
+
+    /*
+     * Acciones: altura mínima cómoda.
+     */
+    .page-card .action-menu__panel button.action-menu__item,
+    .action-menu__panel button.action-menu__item,
+    .action-menu__panel a.action-menu__item {
+      display:flex !important;
+      align-items:center !important;
+      justify-content:flex-start !important;
+
+      width:100% !important;
+      min-height:32px !important;
+      height:auto !important;
+
+      padding:7px 9px !important;
+
+      border-radius:7px !important;
+
+      font-size:11.5px !important;
+      font-weight:600 !important;
+      line-height:1.25 !important;
+
+      white-space:normal !important;
+    }
+
+    .page-card .action-menu__panel button.action-menu__item:hover,
+    .action-menu__panel a.action-menu__item:hover {
+      background:#f1f5f9 !important;
+    }
+
+    /*
+     * Mantener semántica cromática.
+     */
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--primary,
+    .action-menu__panel
+    a.action-menu__item--primary {
+      color:#1d4ed8 !important;
+    }
+
+    .page-card
+    .action-menu__panel
+    button.action-menu__item--danger,
+    .action-menu__panel
+    a.action-menu__item--danger {
+      color:#b91c1c !important;
+    }
+  </style>
+
+
+  <style>
+    /* SOOI_CAPTACION_AVAILABILITY_DIALOG_V1_5 */
+
+    .sooi-availability-dialog {
+      width:min(420px, calc(100vw - 32px));
+      max-width:420px;
+
+      margin:auto;
+      padding:0;
+
+      border:1px solid #dbe3ee;
+      border-radius:14px;
+
+      background:#fff;
+      color:#334155;
+
+      box-shadow:0 24px 70px rgba(15,23,42,.24);
+    }
+
+    .sooi-availability-dialog::backdrop {
+      background:rgba(15,23,42,.34);
+      backdrop-filter:blur(1px);
+    }
+
+    .sooi-availability-dialog__form {
+      display:block !important;
+      width:100% !important;
+      margin:0 !important;
+      padding:18px !important;
+    }
+
+    .sooi-availability-dialog__header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+
+      margin-bottom:5px;
+    }
+
+    .sooi-availability-dialog__header strong {
+      font-size:15px;
+      font-weight:800;
+      color:#0f172a;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-availability-dialog__close {
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+
+      width:28px !important;
+      min-width:28px !important;
+      height:28px !important;
+      min-height:28px !important;
+
+      margin:0 !important;
+      padding:0 !important;
+
+      border:0 !important;
+      border-radius:7px !important;
+
+      background:#f8fafc !important;
+      color:#64748b !important;
+
+      font-size:18px !important;
+      line-height:1 !important;
+      cursor:pointer;
+    }
+
+    .sooi-availability-dialog__help {
+      margin:0 0 14px !important;
+
+      color:#64748b !important;
+      font-size:12px !important;
+      line-height:1.4 !important;
+    }
+
+    .sooi-availability-options {
+      display:grid;
+      gap:8px;
+
+      margin-bottom:18px;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-availability-option {
+      display:flex !important;
+      align-items:center !important;
+      gap:10px !important;
+
+      box-sizing:border-box;
+      width:100%;
+
+      margin:0 !important;
+      padding:10px 11px !important;
+
+      border:1px solid #e2e8f0;
+      border-radius:9px;
+
+      background:#fff;
+
+      color:#334155 !important;
+      font-size:12px !important;
+      font-weight:600 !important;
+
+      cursor:pointer;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-availability-option:hover {
+      background:#f8fafc;
+      border-color:#cbd5e1;
+    }
+
+    .sooi-availability-option input[type="radio"] {
+      width:15px;
+      height:15px;
+      margin:0;
+
+      accent-color:#2563eb;
+      flex:0 0 auto;
+    }
+
+    .sooi-availability-dialog__actions {
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+
+      padding-top:12px;
+      border-top:1px solid #eef2f7;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-dialog-button {
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+
+      width:auto !important;
+      min-width:88px !important;
+
+      height:34px !important;
+      min-height:34px !important;
+
+      margin:0 !important;
+      padding:0 13px !important;
+
+      border-radius:8px !important;
+
+      font-size:12px !important;
+      font-weight:700 !important;
+      line-height:1 !important;
+
+      cursor:pointer;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-dialog-button--secondary {
+      border:1px solid #dbe3ee !important;
+      background:#fff !important;
+      color:#475569 !important;
+    }
+
+    .page-card
+    .sooi-availability-dialog
+    .sooi-dialog-button--primary {
+      border:1px solid #2563eb !important;
+      background:#2563eb !important;
+      color:#fff !important;
+    }
+
+    /*
+     * En el menú principal ya no debe existir ningún
+     * selector ni editor embebido de disponibilidad.
+     */
+    .action-menu__availability-trigger {
+      color:#334155 !important;
+    }
+  </style>
+
+  <script>
+    /* SOOI_CAPTACION_AVAILABILITY_DIALOG_V1_5_BEHAVIOR */
+    (function () {
+      const triggers = Array.from(
+        document.querySelectorAll(
+          "[data-availability-dialog]"
+        )
+      );
+
+      triggers.forEach(function (trigger) {
+        trigger.addEventListener("click", function () {
+          const id = trigger.getAttribute(
+            "data-availability-dialog"
+          );
+
+          const dialog = document.getElementById(id);
+
+          if (!dialog) {
+            return;
+          }
+
+          const menu = trigger.closest(
+            "details.action-menu"
+          );
+
+          if (menu) {
+            menu.open = false;
+          }
+
+          if (typeof dialog.showModal === "function") {
+            dialog.showModal();
+          } else {
+            dialog.setAttribute("open", "");
+          }
+        });
+      });
+
+
+      document
+        .querySelectorAll(
+          ".sooi-availability-dialog [data-dialog-close]"
+        )
+        .forEach(function (button) {
+          button.addEventListener("click", function () {
+            const dialog = button.closest(
+              ".sooi-availability-dialog"
+            );
+
+            if (!dialog) {
+              return;
+            }
+
+            if (typeof dialog.close === "function") {
+              dialog.close();
+            } else {
+              dialog.removeAttribute("open");
+            }
+          });
+        });
+
+
+      document
+        .querySelectorAll(".sooi-availability-dialog")
+        .forEach(function (dialog) {
+          dialog.addEventListener("click", function (event) {
+            if (event.target === dialog) {
+              dialog.close();
+            }
+          });
+        });
+    })();
+  </script>
+
 {% endblock %}

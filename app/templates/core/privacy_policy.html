@@ -1,69 +1,117 @@
-{% extends "core/base_public.html" %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Política de privacidad | SOOI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      background: #f4f7fb;
+      color: #0f172a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 32px auto;
+      padding: 42px;
+      background: #fff;
+      border: 1px solid #dfe6ef;
+      border-radius: 22px;
+    }
+    a { color: #3447e6; }
+    h1 { font-size: 40px; line-height: 1.1; margin: 16px 0 12px; }
+    h2 { margin-top: 30px; font-size: 24px; }
+    p { color: #334155; font-size: 17px; }
+    .back { color: #64748b; text-decoration: none; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="/">← Volver a SOOI</a>
 
-{% block title %}Privacidad | SOOI{% endblock %}
+    <h1>Política de privacidad</h1>
+    <p>Última actualización: mayo de 2026.</p>
 
-{% block content %}
-<div style="min-height:100vh; background:#f4f7fb; padding:56px 20px; color:#0f172a;">
-  <div style="max-width:880px; margin:0 auto;">
-    <div style="background:#fff; border:1px solid #dbe3ee; border-radius:24px; padding:34px;">
-      <a href="/" style="color:#64748b; text-decoration:none; font-weight:700;">← Volver a SOOI</a>
+    <h2>1. Responsable</h2>
+    <p>
+      El responsable del tratamiento de los datos asociados a SOOI es
+      <strong>ICGS Gestión &amp; Servicios S.L.</strong>, titular de la solución SOOI.
+      Para consultas relacionadas con privacidad puedes escribir a
+      <a href="mailto:info@icgs.es">info@icgs.es</a>.
+    </p>
 
-      <h1 style="margin:24px 0 12px; font-size:38px;">Política de privacidad</h1>
-      <p style="color:#64748b;">Última actualización: mayo de 2026.</p>
+    <h2>2. Datos tratados</h2>
+    <p>
+      SOOI puede tratar datos de registro, contacto, solicitudes de demo, datos operativos
+      introducidos por el usuario, búsquedas, captaciones, oportunidades, tareas, alertas,
+      notas internas y datos asociados al seguimiento inmobiliario.
+    </p>
 
-      <h2>1. Responsable</h2>
-      <p>
-        El responsable del tratamiento de los datos asociados a SOOI es
-        <strong>{{ system_settings.company_name|default:"ICGS Gestión & Servicios S.L." }}</strong>.
-        Para consultas relacionadas con privacidad puedes escribir a
-        <a href="mailto:info@sooi.io">info@sooi.io</a>.
-      </p>
+    <h2>3. Finalidad</h2>
+    <p>
+      Los datos se utilizan para prestar el servicio, gestionar el acceso de usuarios,
+      responder solicitudes de demo, operar el sistema de oportunidades inmobiliarias,
+      mejorar la seguridad, mantener la trazabilidad del producto y facilitar la gestión
+      operativa del usuario.
+    </p>
 
-      <h2>2. Datos tratados</h2>
-      <p>
-        SOOI puede tratar datos de registro, contacto, solicitudes de demo, datos operativos introducidos por el usuario,
-        búsquedas, captaciones, tareas, alertas y notas internas asociadas al seguimiento inmobiliario.
-      </p>
+    <h2>4. Legitimación</h2>
+    <p>
+      La base legal para el tratamiento de los datos puede ser la ejecución de una relación
+      contractual o precontractual, el consentimiento del usuario cuando corresponda,
+      el interés legítimo en mantener la seguridad, trazabilidad y funcionamiento del servicio,
+      y el cumplimiento de obligaciones legales aplicables.
+    </p>
 
-      <h2>3. Finalidad</h2>
-      <p>
-        Los datos se utilizan para prestar el servicio, gestionar el acceso de usuarios, responder solicitudes de demo,
-        operar el sistema de oportunidades inmobiliarias y mejorar la seguridad y trazabilidad del producto.
-      </p>
+    <h2>5. Datos de inmuebles y contactos</h2>
+    <p>
+      SOOI está diseñado para minimizar la información personal almacenada. Se recomienda
+      registrar solo la información estrictamente necesaria para el seguimiento operativo
+      y evitar copiar datos personales innecesarios desde portales, fuentes externas o terceros.
+    </p>
 
-      <h2>4. Datos de inmuebles y contactos</h2>
-      <p>
-        SOOI está diseñado para minimizar la información personal almacenada. Se recomienda registrar solo la información         estrictamente necesaria para el seguimiento operativo y evitar copiar datos personales innecesarios desde portales externos.
-      </p>
+    <h2>6. Inteligencia artificial</h2>
+    <p>
+      SOOI puede utilizar funciones de inteligencia artificial como apoyo para exploración,
+      resumen, clasificación o asistencia operativa. Los resultados generados por IA deben
+      ser revisados por el usuario antes de tomar decisiones comerciales, jurídicas, financieras
+      o de inversión.
+    </p>
 
-      <h2>5. Conservación</h2>
-      <p>
-        Los datos se conservarán mientras exista una relación activa con el usuario o mientras sean necesarios para la prestación         del servicio, salvo solicitud de eliminación o bloqueo cuando corresponda.
-      </p>
+    <h2>7. Conservación</h2>
+    <p>
+      Los datos se conservarán mientras exista una relación activa con el usuario o mientras
+      sean necesarios para la prestación del servicio, salvo solicitud de eliminación o bloqueo
+      cuando corresponda.
+    </p>
 
-      <h2>6. Seguridad</h2>
-      <p>
-        SOOI aplica medidas técnicas razonables como autenticación, control de acceso, aislamiento por usuario,
-        copias de seguridad y gestión controlada de credenciales.
-      </p>
+    <h2>8. Proveedores y encargados</h2>
+    <p>
+      SOOI puede apoyarse en proveedores tecnológicos necesarios para prestar el servicio,
+      incluyendo alojamiento cloud, correo electrónico, infraestructura, seguridad y proveedores
+      de inteligencia artificial. Estos proveedores podrán actuar como encargados del tratamiento
+      cuando corresponda.
+    </p>
 
-      <h2>7. Derechos</h2>
-      <p>
-        Puedes solicitar acceso, rectificación, eliminación o limitación del tratamiento escribiendo a
-        <a href="mailto:info@sooi.io">info@sooi.io</a>.
-      </p>
+    <h2>9. Seguridad</h2>
+    <p>
+      SOOI aplica medidas técnicas razonables como autenticación, control de acceso,
+      aislamiento por usuario, copias de seguridad y gestión controlada de credenciales.
+    </p>
 
-      <h2>8. Cambios</h2>
-      <p>
-        Esta política podrá actualizarse para reflejar cambios funcionales, comerciales o normativos del servicio.
-      </p>
-    </div>
-  </div>
-</div>
+    <h2>10. Derechos</h2>
+    <p>
+      Puedes solicitar acceso, rectificación, eliminación, oposición o limitación del tratamiento
+      escribiendo a <a href="mailto:info@icgs.es">info@icgs.es</a>.
+    </p>
 
-<style>
-  h2 { margin-top:28px; font-size:22px; }
-  p { color:#475569; line-height:1.7; }
-  a { color:#2563eb; }
-</style>
-{% endblock %}
+    <h2>11. Cambios</h2>
+    <p>
+      Esta política podrá actualizarse para reflejar cambios funcionales, comerciales,
+      técnicos o normativos del servicio.
+    </p>
+  </main>
+</body>
+</html>

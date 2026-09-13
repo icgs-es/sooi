@@ -1,0 +1,47 @@
+[
+  {
+    "canonical_key": "es:malaga:province",
+    "canonical_name": "Málaga",
+    "type": "province",
+    "province": null,
+    "parent": null,
+    "provenance": [
+      {
+        "provenance_id": "sooi-sr012b-malaga-province",
+        "kind": "sooi_architecture_contract",
+        "reference": "SR0_12B_GEOGRAPHY_ARCHITECTURE.md#6-tipologías-v1",
+        "note": "SR0.12B requires province identities for province hints and territorial validation."
+      }
+    ]
+  },
+  {
+    "canonical_key": "es:malaga:municipality:malaga",
+    "canonical_name": "Málaga",
+    "type": "municipality",
+    "province": "es:malaga:province",
+    "parent": "es:malaga:province",
+    "provenance": [
+      {
+        "provenance_id": "sooi-sr012b-malaga-municipality",
+        "kind": "sooi_architecture_contract",
+        "reference": "SR0_12B_GEOGRAPHY_ARCHITECTURE.md#10-desambiguación-por-provincia-y-tipo",
+        "note": "SR0.12B explicitly distinguishes Málaga municipality from Málaga province."
+      }
+    ]
+  },
+  {
+    "canonical_key": "es:malaga:district:puerto-de-la-torre",
+    "canonical_name": "Puerto de la Torre",
+    "type": "district",
+    "province": "es:malaga:province",
+    "parent": "es:malaga:municipality:malaga",
+    "provenance": [
+      {
+        "provenance_id": "sooi-sr012b-puerto-de-la-torre-district",
+        "kind": "sooi_architecture_contract",
+        "reference": "SR0_12B_GEOGRAPHY_ARCHITECTURE.md#6-tipologías-v1",
+        "note": "SR0.12B contractually classifies Puerto de la Torre as a district with Málaga municipality as parent."
+      }
+    ]
+  }
+]

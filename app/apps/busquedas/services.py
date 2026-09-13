@@ -4,6 +4,8 @@ from apps.fuentes.models import Source
 from apps.inmuebles.models import CapturedProperty
 from .ai_discovery import AIDiscoveryClient
 from .models import SearchProfile, SearchRun
+from .price import normalize_euro_price
+from apps.ia.usage import can_run_ai_discovery, format_ai_quota_message
 from urllib.parse import urlparse, urlunparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -11,6 +13,247 @@ from django.utils.text import slugify
 import re
 import unicodedata
 from difflib import SequenceMatcher
+
+# === SOOI V2.5 · AI Discovery trust gate helpers ===
+def _sooi_v25_json_value(value):
+    if value is None:
+        return None
+    try:
+        from decimal import Decimal
+        if isinstance(value, Decimal):
+            return float(value)
+    except Exception:
+        pass
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    return str(value)
+
+
+def _sooi_v25_to_float(value):
+    normalized = normalize_euro_price(value)
+    return float(normalized) if normalized is not None else None
+
+
+def _sooi_v25_get_local_value(scope, *names):
+    for name in names:
+        value = scope.get(name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _sooi_v25_price_in_range(price, min_price=None, max_price=None):
+    price_f = _sooi_v25_to_float(price)
+    if price_f is None:
+        return False
+    min_f = _sooi_v25_to_float(min_price)
+    max_f = _sooi_v25_to_float(max_price)
+    if min_f is not None and price_f < min_f:
+        return False
+    if max_f is not None and price_f > max_f:
+        return False
+    return True
+
+
+def _sooi_v25_reason_text(reason):
+    return str(reason or "").strip().lower()
+
+
+def _sooi_v25_is_hard_unavailable(reason):
+    r = _sooi_v25_reason_text(reason)
+    hard_terms = (
+        "retirado",
+        "no disponible",
+        "anuncio no disponible",
+        "eliminado",
+        "removed",
+        "deleted",
+        "unavailable",
+        "expired",
+        "404",
+        "not found",
+        "listado",
+        "búsqueda",
+        "busqueda",
+        "home",
+        "homepage",
+        "url generica",
+        "url genérica",
+    )
+    return any(term in r for term in hard_terms)
+
+
+def _sooi_v25_is_soft_non_verifiable(reason):
+    r = _sooi_v25_reason_text(reason)
+    if _sooi_v25_is_hard_unavailable(r):
+        return False
+    soft_terms = (
+        "403",
+        "429",
+        "forbidden",
+        "too many requests",
+        "no verificable",
+        "not verifiable",
+        "idealista",
+        "yaencontre",
+        "yaencontré",
+        "precio_no_encontrado",
+        "precio no encontrado",
+        "price_not_found",
+        "html",
+        "bloqueado",
+        "blocked",
+    )
+    return any(term in r for term in soft_terms)
+
+
+
+def _sooi_v25_text_has_unavailable_signal(text):
+    if not text:
+        return None
+
+    import re
+    normalized = re.sub(r"\s+", " ", str(text).lower())
+
+    signals = (
+        ("idealista_anuncio_no_publicado", "lo sentimos, este anuncio ya no está publicado"),
+        ("idealista_anuncio_no_publicado", "lo sentimos, este anuncio ya no esta publicado"),
+        ("anuncio_no_publicado", "este anuncio ya no está publicado"),
+        ("anuncio_no_publicado", "este anuncio ya no esta publicado"),
+        ("anuncio_dado_de_baja", "lo dio de baja"),
+        ("anuncio_dado_de_baja", "dado de baja"),
+        ("anuncio_no_disponible", "anuncio no disponible"),
+        ("anuncio_retirado", "anuncio retirado"),
+        ("inmueble_retirado", "inmueble retirado"),
+    )
+
+    for code, phrase in signals:
+        if phrase in normalized:
+            return code
+
+    return None
+
+
+def _sr0_is_fotocasa_generic_unavailable(url, status_code, reason):
+    host = _extract_hostname(url)
+    normalized = _sooi_v25_reason_text(reason)
+    return (
+        host == "fotocasa.es"
+        and int(status_code or 0) == 200
+        and normalized in {
+            "anuncio no disponible",
+            "este anuncio no está disponible",
+            "este anuncio no esta disponible",
+            "anuncio_no_disponible",
+        }
+    )
+
+
+def _sooi_v25_url_has_unavailable_signal(url):
+    if not url:
+        return None
+
+    try:
+        import requests
+
+        response = requests.get(
+            url,
+            timeout=12,
+            allow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0 Safari/537.36"
+                ),
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+            },
+        )
+
+        signal = _sooi_v25_text_has_unavailable_signal(response.text)
+        if signal:
+            if _sr0_is_fotocasa_generic_unavailable(url, response.status_code, signal):
+                return None
+            return signal
+
+        if response.status_code == 404:
+            return "http_404"
+
+        return None
+
+    except Exception:
+        # 403/429/timeout no son descarte duro: siguen siendo revisables.
+        return None
+
+
+def _sooi_v25_add_warning(scope, message):
+    warnings = scope.get("warnings")
+    if isinstance(warnings, list):
+        warnings.append(message)
+
+
+def _sooi_v25_quality_gate(raw_response):
+    if not isinstance(raw_response, dict):
+        return {
+            "verified": 0,
+            "reviewable": 0,
+            "discarded": 0,
+            "total_candidates": 0,
+        }
+
+    qg = raw_response.setdefault("quality_gate", {})
+    qg.setdefault("version", "sooi_v2_5")
+    qg.setdefault("verified", 0)
+    qg.setdefault("reviewable", 0)
+    qg.setdefault("discarded", 0)
+    qg.setdefault("total_candidates", 0)
+    return qg
+
+
+def _sooi_v25_finalize_raw_response(raw_response):
+    if not isinstance(raw_response, dict):
+        return raw_response
+
+    qg = raw_response.setdefault("quality_gate", {})
+    verified = int(qg.get("verified") or 0)
+    reviewable = int(qg.get("reviewable") or 0)
+    discarded = int(qg.get("discarded") or 0)
+
+    raw_response["total_found"] = verified + reviewable
+    raw_response["total_errors"] = discarded
+    return raw_response
+
+
+def _sooi_v25_merge_ai_signals(
+    existing,
+    *,
+    trust_level,
+    accepted,
+    reviewable,
+    validation_reason,
+    price_validation_reason,
+    ai_price,
+    portal_price,
+    max_allowed_price,
+):
+    data = existing if isinstance(existing, dict) else {}
+    data = dict(data)
+
+    data.update({
+        "version": "sooi_v2_5",
+        "trust_level": trust_level,
+        "accepted": bool(accepted),
+        "reviewable": bool(reviewable),
+        "validation_reason": validation_reason,
+        "price_validation_reason": price_validation_reason,
+        "ai_price": _sooi_v25_json_value(ai_price),
+        "portal_price": _sooi_v25_json_value(portal_price),
+        "max_allowed_price": _sooi_v25_json_value(max_allowed_price),
+    })
+    return data
+
+# === /SOOI V2.5 ===
+
 
 def _normalize_property_url(source_url: str) -> str:
     if not source_url:
@@ -254,7 +497,36 @@ def _looks_like_property_detail_url(source_url: str) -> bool:
             and re.search(r"/\d{6,}$", path) is not None
         )
 
-    return True
+    if host == "solvia.es" or host.endswith(".solvia.es"):
+        # Ficha real Solvia:
+        # /es/propiedades/comprar/piso-almeria-3-dormitorios-164993-202819
+        # Rechaza listados como /es/comprar/viviendas/cordoba?...
+        return (
+            path.startswith("/es/propiedades/comprar/")
+            and re.search(r"-\d{5,}-\d{5,}$", path) is not None
+        )
+
+    if host == "altamirainmuebles.com" or host.endswith(".altamirainmuebles.com"):
+        # Ficha real Altamira:
+        # /venta-de-piso/almeria/vicar/segunda-mano/29000944/208591/1
+        # Rechaza listados o páginas sin identificadores finales.
+        return re.search(
+            r"/(?:venta|alquiler)-de-[^/]+/.+/(?:segunda-mano|obra-nueva)/\d{5,}/\d{5,}/\d+$",
+            path,
+        ) is not None
+
+    if host == "yaencontre.com" or host.endswith(".yaencontre.com"):
+        # Rechazar páginas de listado/búsqueda como:
+        # /alquiler/pisos/torremolinos
+        # /venta/casas/malaga
+        # Solo aceptamos si la URL contiene un identificador largo compatible con ficha.
+        if path.startswith(("/alquiler/", "/venta/", "/comprar/")):
+            return re.search(r"\d{5,}", path) is not None
+
+        return False
+
+    # Para portales no modelados explícitamente, mejor no aceptar automáticamente.
+    return False
 
 
 def _fetch_url_probe(source_url: str) -> tuple[int, str, str, str]:
@@ -285,87 +557,83 @@ def _fetch_url_probe(source_url: str) -> tuple[int, str, str, str]:
 def _validate_property_source_url(source_url: str) -> tuple[bool, str]:
     normalized_url = _normalize_property_url(source_url) or source_url
 
+    if not normalized_url:
+        return False, "sin source_url"
+
     if not _looks_like_property_detail_url(normalized_url):
         return False, "url no parece ficha real"
 
     status_code, final_url, html, error = _fetch_url_probe(normalized_url)
 
-    if error:
-        if _is_trusted_property_portal_url(normalized_url):
-            return True, f"ok: ficha real de portal conocido, no verificable automáticamente por {error}"
-        return False, f"bloqueada o no verificable: {error}"
-
+    # Errores concluyentes: el anuncio/recurso no existe.
     if status_code in {404, 410}:
-        return False, f"http {status_code}: página inexistente"
+        return False, f"http {status_code}"
 
-    if status_code >= 400:
-        if status_code == 403:
-            if _is_trusted_property_portal_url(normalized_url):
-                return True, "ok: ficha real de portal conocido, bloqueada por protección anti-bot"
-            return False, "no verificable por bloqueo del portal"
-        return False, f"http {status_code}: no accesible"
+    # 400 suele indicar URL mal formada o recurso inválido.
+    if status_code == 400:
+        return False, "http 400"
 
-    final_normalized_url = _normalize_property_url(final_url) or final_url
-    if final_normalized_url and not _looks_like_property_detail_url(final_normalized_url):
-        return False, "redirige a una página que no parece ficha real"
+    text = (html or "").lower()
+    text_no_accents = (
+        text
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ü", "u")
+    )
 
-    html = html or ""
-
-    if len(html.strip()) < 500:
-        return False, "contenido insuficiente"
-
-    unpublished_markers = [
-        "este anuncio ya no está publicado",
-        "este anuncio ya no esta publicado",
+    retired_markers = [
+        "anuncio no disponible",
+        "este anuncio no está disponible",
+        "este anuncio no esta disponible",
+        "anuncio no encontrado",
+        "lo sentimos, este anuncio ya no está publicado",
+        "lo sentimos este anuncio ya no está publicado",
         "anuncio ya no está publicado",
-        "anuncio ya no esta publicado",
+        "este anuncio ya no está publicado",
+        "ya no está publicado",
         "el anunciante lo dio de baja",
-        "no corresponde a ninguna página",
-        "no corresponde a ninguna pagina",
-        "does not correspond to any page",
-        "page not found",
-        "not found",
-        "404",
+        "lo sentimos, este anuncio ya no esta publicado",
+        "lo sentimos este anuncio ya no esta publicado",
+        "anuncio ya no esta publicado",
+        "este anuncio ya no esta publicado",
+        "ya no esta publicado",
+        "el anunciante lo dio de baja",
     ]
 
-    if any(marker in html for marker in unpublished_markers):
-        return False, "anuncio no publicado o página inexistente"
-
-    listing_markers = [
-        ("guardar búsqueda", "ordenar por"),
-        ("guardar busqueda", "ordenar por"),
-        ("resultados", "ordenar por"),
-        ("alquiler de pisos en", "resultados"),
-        ("venta de pisos en", "resultados"),
-        ("alquiler de casas en", "resultados"),
-        ("venta de casas en", "resultados"),
-        ("búsqueda clásica", "búsqueda por ia"),
-        ("busqueda clasica", "busqueda por ia"),
-        ("ver mapa", "guardar búsqueda"),
-        ("ver mapa", "guardar busqueda"),
+    matched_markers = [
+        marker for marker in retired_markers
+        if marker in text or marker in text_no_accents
     ]
+    if matched_markers and _sr0_is_fotocasa_generic_unavailable(
+        normalized_url, status_code, matched_markers[0]
+    ):
+        return False, "fotocasa http 200 no verificable por texto genérico"
 
-    for marker_a, marker_b in listing_markers:
-        if marker_a in html and marker_b in html:
-            return False, "página de listado o búsqueda"
+    if matched_markers:
+        return False, "anuncio retirado o no publicado"
 
-    active_hints = [
-        "€",
-        "m²",
-        "m2",
-        "habitaciones",
-        "dormitorios",
-        "baño",
-        "baños",
-        "contactar",
-        "referencia",
-    ]
+    host = _extract_hostname(normalized_url)
 
-    if not any(marker in html for marker in active_hints):
-        return False, "sin señales mínimas de anuncio activo"
+    # Idealista puede bloquear la validación HTTP desde servidor aunque la URL sea una ficha real.
+    # No intentamos saltar el bloqueo: aceptamos la captación como pendiente de revisión manual
+    # siempre que previamente haya pasado la validación estructural de URL (/inmueble/<id>/).
+    if status_code == 403 and "idealista." in host:
+        return False, "idealista no verificable desde servidor"
+
+    # Si otros portales bloquean o limitan la petición, no descartamos para evitar falsos negativos.
+    if status_code in {401, 403, 429}:
+        return False, f"validación no concluyente: http {status_code}"
+
+    if status_code >= 500:
+        return False, f"validación no concluyente: http {status_code}"
+
+    if status_code == 0 and error:
+        return False, f"validación no concluyente: {error}"
 
     return True, "ok"
-
 
 def _build_capture_warning(idx: int, reason: str, source_url: str = "") -> str:
     base = f"Item {idx} descartado: {reason}"
@@ -471,6 +739,7 @@ def _run_mock_search(search_profile: SearchProfile) -> SearchRun:
                 "last_seen_at": timezone.now(),
             },
         )
+
         if created:
             total_new += 1
         else:
@@ -489,6 +758,136 @@ def _run_mock_search(search_profile: SearchProfile) -> SearchRun:
 
     return run
 
+def _quality_gate_decimal(value):
+    return normalize_euro_price(value)
+
+
+def _extract_portal_price_for_quality_gate(url: str):
+    """
+    Devuelve (precio_decimal, razon).
+    Regla operativa: si no se puede confirmar precio real, no se debe guardar captación automática.
+    """
+    import re
+    from decimal import Decimal, InvalidOperation
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    if not url:
+        return None, "sin_url"
+
+    def to_decimal(raw):
+        if raw is None:
+            return None
+
+        s = str(raw)
+        s = s.replace("\\xa0", " ").strip()
+        s = re.sub(r"[^0-9,\\.]", "", s)
+
+        if not s:
+            return None
+
+        if "," in s and "." in s:
+            if s.rfind(",") > s.rfind("."):
+                s = s.replace(".", "").replace(",", ".")
+            else:
+                s = s.replace(",", "")
+        elif "," in s:
+            if re.search(r",\\d{1,2}$", s):
+                s = s.replace(",", ".")
+            else:
+                s = s.replace(",", "")
+        elif "." in s:
+            if not re.search(r"\\.\\d{1,2}$", s):
+                s = s.replace(".", "")
+
+        try:
+            value = Decimal(s)
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+
+        if value <= 0 or value > Decimal("10000000"):
+            return None
+
+        return value
+
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+            },
+        )
+
+        with urlopen(req, timeout=10) as response:
+            status = getattr(response, "status", None) or response.getcode()
+            if status and int(status) >= 400:
+                return None, f"http_{status}"
+
+            raw = response.read(2_000_000)
+
+    except HTTPError as exc:
+        return None, f"http_{exc.code}"
+    except URLError as exc:
+        return None, f"url_error_{exc.reason}"
+    except Exception as exc:
+        return None, f"fetch_error_{exc.__class__.__name__}"
+
+    html = raw.decode("utf-8", errors="ignore")
+    html = html.replace("&euro;", "€").replace("&#8364;", "€")
+    lower = html.lower()
+
+    retired_phrases = [
+        "anuncio no disponible",
+        "este anuncio ya no está disponible",
+        "este anuncio ya no esta disponible",
+        "anuncio retirado",
+        "publicación no disponible",
+        "publicacion no disponible",
+        "página no encontrada",
+        "pagina no encontrada",
+        "no encontramos el anuncio",
+    ]
+
+    if any(phrase in lower for phrase in retired_phrases):
+        return None, "anuncio_no_disponible"
+
+    patterns = [
+        r'property=["\\\']product:price:amount["\\\'][^>]+content=["\\\']([0-9][0-9\\., ]{1,14})["\\\']',
+        r'name=["\\\']product:price:amount["\\\'][^>]+content=["\\\']([0-9][0-9\\., ]{1,14})["\\\']',
+        r'"price"\\s*:\\s*"?([0-9][0-9\\., ]{1,14})"?',
+        r'"amount"\\s*:\\s*"?([0-9][0-9\\., ]{1,14})"?',
+        r'([0-9]{1,3}(?:[\\.\\s][0-9]{3})+|[0-9]{3,6})(?:,[0-9]{1,2})?\\s*(?:€|eur)\\s*(?:/\\s*)?(?:mes|month)?',
+    ]
+
+    seen = set()
+
+    for pattern in patterns:
+        for match in re.finditer(pattern, html, flags=re.I):
+            value = to_decimal(match.group(1))
+            if value is None:
+                continue
+
+            key = str(value)
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            # Para SOOI operativo, ignoramos importes demasiado bajos que suelen ser cuotas, refs o basura.
+            if value < Decimal("100"):
+                continue
+
+            return value, "precio_extraido_portal"
+
+    return None, "precio_no_encontrado_en_html"
+
+
 def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = None) -> SearchRun:
     if run is None:
         run = SearchRun.objects.create(
@@ -502,6 +901,47 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
         run.execution_mode = SearchRun.ExecutionMode.AI_DISCOVERY
         run.started_at = run.started_at or timezone.now()
         run.save(update_fields=["status", "execution_mode", "started_at", "updated_at"])
+
+    from .commercial_metering import commercial_metering_enabled
+    commercially_authorized = bool(
+        commercial_metering_enabled() and run.governance_enabled
+        and run.budget_reserved_credits is not None
+    )
+    allowed, usage = (True, None) if commercially_authorized else can_run_ai_discovery(
+        search_profile.owner, exclude_run_id=run.id,
+    )
+    if not allowed:
+        message = format_ai_quota_message(usage)
+        run.status = SearchRun.Status.COMPLETED
+        run.finished_at = timezone.now()
+        run.provider = "sooi_quota"
+        run.model_name = "monthly_ai_quota"
+        run.total_candidates = 0
+        run.total_valid_candidates = 0
+        run.total_found = 0
+        run.total_new = 0
+        run.total_updated = 0
+        run.total_errors = 0
+        run.error_message = ""
+        run.warnings = [message]
+        run.run_notes = "Ejecución IA no realizada por cupo mensual del plan. No se marca como fallida."
+        run.save(update_fields=[
+            "status",
+            "finished_at",
+            "provider",
+            "model_name",
+            "total_candidates",
+            "total_valid_candidates",
+            "total_found",
+            "total_new",
+            "total_updated",
+            "total_errors",
+            "error_message",
+            "warnings",
+            "run_notes",
+            "updated_at",
+        ])
+        return run
 
     try:
         client = AIDiscoveryClient()
@@ -550,7 +990,7 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
         result.provider == "unconfigured"
         or any(status in blocking_statuses for status in provider_statuses)
     ):
-        run.status = SearchRun.Status.FAILED
+        run.status = SearchRun.Status.COMPLETED
         run.finished_at = timezone.now()
         run.total_candidates = 0
         run.total_valid_candidates = 0
@@ -558,8 +998,8 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
         run.total_new = 0
         run.total_updated = 0
         run.total_errors = 0
-        run.error_message = "; ".join(run.warnings or [])[:2000]
-        run.run_notes = "Ejecución IA no realizada por incidencia del proveedor."
+        run.error_message = ""
+        run.run_notes = "Ejecución IA sin captaciones: proveedor no disponible, sin saldo, sin cuota o sin proveedor alternativo. No se marca como fallida."
         run.save(update_fields=[
             "status",
             "finished_at",
@@ -580,6 +1020,11 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
     total_new = 0
     total_updated = 0
     total_errors = 0
+
+    # SOOI V2.5: raw_response inicializado antes del quality gate
+    raw_response = run.raw_response if isinstance(run.raw_response, dict) else {"raw": run.raw_response}
+    if raw_response is None:
+        raw_response = {}
 
     for idx, item in enumerate(result.items, start=1):
         if not item.source_url:
@@ -602,6 +1047,14 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
                 _build_capture_warning(idx, "precio no informado y hay precio máximo configurado", item.source_url)
             ]
             continue
+
+        quality_gate_warnings = []
+
+        if item.price is None:
+            quality_gate_warnings.append("precio_no_verificado_desde_portal")
+            run.warnings = list(run.warnings or []) + [
+                _build_capture_warning(idx, "precio no verificado desde portal", item.source_url)
+            ]
 
         if search_profile.min_price is not None and item.price is not None and item.price < search_profile.min_price:
             total_errors += 1
@@ -655,17 +1108,122 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
 
         validation_url = _normalize_property_url(item.source_url) or item.source_url
         is_valid_url, validation_reason = _validate_property_source_url(validation_url)
+        sooi_v25_quality_gate = _sooi_v25_quality_gate(raw_response)
+        sooi_v25_quality_gate["total_candidates"] += 1
+        sooi_v25_min_allowed_price = _sooi_v25_get_local_value(locals(), "min_price", "min_allowed_price", "precio_min", "precio_desde")
+        sooi_v25_max_allowed_price = _sooi_v25_get_local_value(locals(), "max_price", "max_allowed_price", "precio_max", "precio_hasta")
+        sooi_v25_trust_level = "verified"
+        sooi_v25_target_status = CapturedProperty.Status.CAPTURED
+        sooi_v25_accepted = True
+        sooi_v25_reviewable = False
+        sooi_v25_validation_reason = validation_reason
+        sooi_v25_price_validation_reason = None
+        sooi_v25_portal_price_for_signals = None
 
         if not is_valid_url:
-            total_errors += 1
-            run.warnings = list(run.warnings or []) + [
-                _build_capture_warning(
-                    idx,
-                    f"url descartada: {validation_reason}",
-                    validation_url,
+            if (
+                _sooi_v25_is_soft_non_verifiable(validation_reason)
+                and _sooi_v25_price_in_range(getattr(item, "price", None), sooi_v25_min_allowed_price, sooi_v25_max_allowed_price)
+            ):
+                sooi_v25_trust_level = "reviewable"
+                sooi_v25_target_status = CapturedProperty.Status.IN_REVIEW
+                sooi_v25_accepted = False
+                sooi_v25_reviewable = True
+                sooi_v25_validation_reason = validation_reason or "url_no_verificable"
+                _sooi_v25_add_warning(
+                    locals(),
+                    f"SOOI V2.5 reviewable: URL no verificable pero ficha candidata razonable: {getattr(item, 'url', '')} · razón={sooi_v25_validation_reason}"
                 )
-            ]
-            continue
+            else:
+                sooi_v25_quality_gate["discarded"] += 1
+                _sooi_v25_add_warning(
+                    locals(),
+                    f"SOOI V2.5 descartado: URL no válida/no individual/no disponible: {getattr(item, 'url', '')} · razón={validation_reason}"
+                )
+                continue
+        if validation_reason != "ok":
+            quality_gate_warnings.append(f"url_validacion_no_concluyente: {validation_reason}")
+
+        item_price_for_save = item.price
+        portal_price = None
+        price_validation_reason = "sin_max_price_configurado"
+
+        max_price = _quality_gate_decimal(getattr(search_profile, "max_price", None))
+        min_price = _quality_gate_decimal(getattr(search_profile, "min_price", None))
+
+        if max_price is not None:
+            portal_price, price_validation_reason = _extract_portal_price_for_quality_gate(validation_url)
+
+            if portal_price is None:
+                sooi_v25_price_validation_reason = price_validation_reason or "precio_no_encontrado_en_html"
+                sooi_v25_portal_price_for_signals = None
+
+                sooi_v25_unavailable_reason = _sooi_v25_url_has_unavailable_signal(validation_url)
+                if sooi_v25_unavailable_reason:
+                    sooi_v25_quality_gate["discarded"] += 1
+                    _sooi_v25_add_warning(
+                        locals(),
+                        f"SOOI V2.5 descartado: anuncio no publicado/retirado: {getattr(item, 'url', '')} · razón={sooi_v25_unavailable_reason}"
+                    )
+                    continue
+
+                if (
+                    _sooi_v25_is_soft_non_verifiable(sooi_v25_price_validation_reason)
+                    and _sooi_v25_price_in_range(getattr(item, "price", None), sooi_v25_min_allowed_price, sooi_v25_max_allowed_price)
+                    and not _sooi_v25_is_hard_unavailable(sooi_v25_validation_reason)
+                ):
+                    sooi_v25_trust_level = "reviewable"
+                    sooi_v25_target_status = CapturedProperty.Status.IN_REVIEW
+                    sooi_v25_accepted = False
+                    sooi_v25_reviewable = True
+
+                    # Permitimos que el flujo existente continúe usando precio IA,
+                    # pero en ai_signals dejamos portal_price=None.
+                    portal_price = getattr(item, "price", None)
+
+                    _sooi_v25_add_warning(
+                        locals(),
+                        f"SOOI V2.5 reviewable: precio portal no verificable; se usa precio IA para revisión humana: {getattr(item, 'url', '')} · razón={sooi_v25_price_validation_reason}"
+                    )
+                else:
+                    sooi_v25_quality_gate["discarded"] += 1
+                    _sooi_v25_add_warning(
+                        locals(),
+                        f"SOOI V2.5 descartado: precio portal no verificable y candidato no revisable: {getattr(item, 'url', '')} · razón={sooi_v25_price_validation_reason}"
+                    )
+                    continue
+            else:
+                sooi_v25_portal_price_for_signals = portal_price
+                sooi_v25_price_validation_reason = price_validation_reason if "price_validation_reason" in locals() else None
+            if min_price is not None and portal_price < min_price:
+                total_errors += 1
+                run.warnings = list(run.warnings or []) + [
+                    _build_capture_warning(
+                        idx,
+                        f"precio portal por debajo del mínimo ({portal_price} < {min_price})",
+                        validation_url,
+                    )
+                ]
+                continue
+
+            if portal_price > max_price:
+                total_errors += 1
+                run.warnings = list(run.warnings or []) + [
+                    _build_capture_warning(
+                        idx,
+                        f"precio portal por encima del máximo ({portal_price} > {max_price})",
+                        validation_url,
+                    )
+                ]
+                continue
+
+            ai_price = _quality_gate_decimal(item.price)
+            if ai_price is not None and ai_price != portal_price:
+                quality_gate_warnings.append(
+                    f"precio_ia_difiere_portal: ia={ai_price} portal={portal_price}"
+                )
+
+            item_price_for_save = portal_price
 
         total_valid_candidates += 1
 
@@ -683,7 +1241,7 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
                 (search_profile.property_types or [CapturedProperty.PropertyType.FLAT])[0]
             ),
             municipality=item.municipality or "",
-            price=item.price,
+            price=item_price_for_save,
             title=item.title,
             external_id=external_id,
         )
@@ -702,14 +1260,30 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
                 (search_profile.property_types or [CapturedProperty.PropertyType.FLAT])[0]
             ),
             "operation_type": search_profile.operation_type,
-            "price": item.price,
+            "price": item_price_for_save,
             "bedrooms": item.bedrooms,
             "bathrooms": item.bathrooms,
             "area_m2": item.area_m2,
-            "status": CapturedProperty.Status.CAPTURED,
+            "status": sooi_v25_target_status,
             "review_status": CapturedProperty.ReviewStatus.PENDING,
             "source_url": normalized_url or item.source_url,
             "possible_duplicate": possible_duplicate,
+            "ai_signals": {
+                **_sooi_v25_merge_ai_signals(
+                    None,
+                    trust_level=sooi_v25_trust_level,
+                    accepted=sooi_v25_accepted,
+                    reviewable=sooi_v25_reviewable,
+                    validation_reason=sooi_v25_validation_reason,
+                    price_validation_reason=sooi_v25_price_validation_reason,
+                    ai_price=getattr(item, "price", None),
+                    portal_price=sooi_v25_portal_price_for_signals,
+                    max_allowed_price=sooi_v25_max_allowed_price,
+                ),
+                "type": "quality_gate",
+                "warnings": quality_gate_warnings,
+                "source_url_checked": validation_url,
+            },
             "last_seen_at": timezone.now(),
         }
 
@@ -742,6 +1316,8 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
             )
             created = True
 
+        sooi_v25_quality_gate["reviewable" if sooi_v25_reviewable else "verified"] += 1
+
         if created:
             total_new += 1
         else:
@@ -756,11 +1332,198 @@ def _run_ai_discovery(search_profile: SearchProfile, run: SearchRun | None = Non
     run.total_updated = total_updated
     run.total_errors = total_errors
     run.run_notes = "Ejecución AI Discovery en segundo plano."
+
+    if "raw_response" not in locals() or not isinstance(raw_response, dict):
+        raw_response = run.raw_response if isinstance(run.raw_response, dict) else {"raw": run.raw_response}
+
+    sooi_v25_quality_gate = _sooi_v25_quality_gate(raw_response)
+    sooi_v25_quality_gate["version"] = "sooi_v2_5"
+    sooi_v25_quality_gate["total_candidates"] = total_candidates
+    sooi_v25_quality_gate["warnings_count"] = len(run.warnings or [])
+
+    _sooi_v25_finalize_raw_response(raw_response)
+
+    run.total_found = raw_response.get("total_found", 0)
+    run.total_errors = raw_response.get("total_errors", 0)
+    run.raw_response = raw_response
+
     run.warnings = list(run.warnings or [])
     run.save()
 
     return run
 
 
+
+def _sooi_env_flag(name: str, default: str = "0") -> bool:
+    import os
+    return str(os.environ.get(name, default)).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
+
+
+def _sooi_env_int(name: str, default: int, min_value: int, max_value: int) -> int:
+    import os
+    try:
+        value = int(str(os.environ.get(name, default)).strip())
+    except Exception:
+        value = default
+    return max(min_value, min(max_value, value))
+
+
+def _sooi_v2614_flag_enabled() -> bool:
+    return _sooi_env_flag("SOOI_USE_HYBRID_V2614", "0")
+
+
+def _sooi_v2614_write_enabled() -> bool:
+    # Segundo seguro: permite probar el motor normal sin escribir captaciones.
+    return _sooi_env_flag("SOOI_HYBRID_V2614_WRITE", "0")
+
+
+
+def _sooi_json_safe_v2614(value):
+    import json
+    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
+def _sr0_is_low_coverage(totals, total_candidates, total_valid):
+    attempted = int((totals or {}).get("attempted") or 0)
+    failed = int((totals or {}).get("failed") or 0)
+    discarded = int((totals or {}).get("discarded") or 0)
+    valid = int(total_valid or 0)
+    candidates = int(total_candidates or 0)
+    return (
+        attempted > 0
+        and valid <= 1
+        and (failed > 0 or discarded > 0 or candidates > valid)
+    )
+
+def _run_hybrid_discovery_v2614(
+    search_profile: SearchProfile, run: SearchRun | None = None, *, write_override=None,
+    timeout_override=None, max_results_override=None, use_ai_override=None,
+) -> SearchRun:
+    from django.utils import timezone
+    from apps.busquedas.services_hybrid_coverage_v261 import run_hybrid_discovery_v261
+
+    if run is None:
+        run = SearchRun.objects.create(
+            search_profile=search_profile,
+            status=SearchRun.Status.RUNNING,
+            execution_mode=SearchRun.ExecutionMode.AI_DISCOVERY,
+            started_at=timezone.now(),
+        )
+    else:
+        # Celery redelivery/replay of a completed durable analysis must not
+        # turn into a second paid discovery.
+        if (
+            run.governance_enabled
+            and run.status in {SearchRun.Status.COMPLETED, SearchRun.Status.COMPLETED_WITH_ERRORS}
+            and isinstance(run.raw_response, dict)
+            and isinstance(run.raw_response.get("source_coverage"), list)
+        ):
+            return run
+        run.status = SearchRun.Status.RUNNING
+        run.execution_mode = SearchRun.ExecutionMode.AI_DISCOVERY
+        run.started_at = run.started_at or timezone.now()
+        run.save(update_fields=["status", "execution_mode", "started_at", "updated_at"])
+
+    timeout = _sooi_env_int("SOOI_HYBRID_V2614_TIMEOUT", 12, 4, 30)
+    max_results = _sooi_env_int("SOOI_HYBRID_V2614_MAX_RESULTS", 8, 1, 20)
+    use_ai = _sooi_env_flag("SOOI_HYBRID_V2614_USE_AI", "1")
+    if timeout_override is not None:
+        timeout = int(timeout_override)
+    if max_results_override is not None:
+        max_results = int(max_results_override)
+    if use_ai_override is not None:
+        use_ai = bool(use_ai_override)
+    write = _sooi_v2614_write_enabled() if write_override is None else bool(write_override)
+
+    version_label = "V2.6.1"
+    try:
+        result = run_hybrid_discovery_v261(
+            search_profile.id,
+            timeout=timeout,
+            max_results_per_source=max_results,
+            use_ai=use_ai,
+            write=write,
+            search_run=run,
+        )
+    except Exception as exc:
+        run.status = SearchRun.Status.FAILED
+        run.finished_at = timezone.now()
+        run.provider = "sooi_hybrid_v2614"
+        run.model_name = version_label
+        run.error_message = str(exc)
+        run.warnings = [f"Error en SOOI Hybrid V2.6.1.4: {exc}"]
+        run.run_notes = "Ejecución híbrida V2.6.1.4 fallida."
+        run.save(update_fields=[
+            "status", "finished_at", "provider", "model_name",
+            "error_message", "warnings", "run_notes", "updated_at",
+        ])
+        return run
+
+    totals = result.get("totals") or {}
+    action_totals = (result.get("action_plan") or {}).get("totals") or {}
+    write_result = result.get("write_result") or {}
+    version_label = (result.get("version") or "V2.6.1").replace("-dry-run", "").replace("-write", "")
+
+    source_coverage = result.get("source_coverage") or []
+    total_candidates = sum(int(row.get("candidate_count") or 0) for row in source_coverage)
+    quality_semantics = result.get("quality_semantics") or {}
+    total_valid = int(quality_semantics.get("actionable_count") or totals.get("actionable") or 0)
+
+    warnings = []
+    if not result.get("is_complete"):
+        warnings.append(f"SOOI {version_label}: ejecución incompleta; no se intentaron todas las fuentes aplicables.")
+    if int(action_totals.get("skip_existing_opportunity_unavailable") or 0):
+        warnings.append(f"SOOI {version_label}: hay oportunidades existentes con anuncio no verificable/no disponible; no se modificaron automáticamente.")
+    if not write:
+        warnings.append(f"SOOI {version_label} ejecutado en modo sin escritura por SOOI_HYBRID_V2614_WRITE=0.")
+
+    low_coverage = _sr0_is_low_coverage(totals, total_candidates, total_valid)
+    if low_coverage:
+        warnings.append(
+            "SOOI_SEARCH_LOW_COVERAGE: la ejecución terminó, pero la cobertura "
+            "o validación fue insuficiente; cero resultados no implica ausencia "
+            "de oferta en el mercado."
+        )
+
+    run.status = (
+        SearchRun.Status.COMPLETED_WITH_ERRORS
+        if low_coverage else SearchRun.Status.COMPLETED
+    )
+    run.finished_at = timezone.now()
+    run.provider = "sooi_hybrid_v2614"
+    run.model_name = version_label
+    run.query_text = f"SOOI Hybrid V2.6.1.4 · profile={search_profile.id} · {search_profile.name}"
+    run.filters_snapshot = _sooi_json_safe_v2614(result.get("context") or {})
+    run.raw_response = _sooi_json_safe_v2614(result)
+    run.warnings = warnings
+    run.total_candidates = total_candidates
+    run.total_valid_candidates = total_valid
+    run.total_found = total_valid
+    run.total_new = int(write_result.get("created") or 0)
+    run.total_updated = int(write_result.get("updated") or 0)
+    run.total_errors = int(totals.get("failed") or 0)
+    run.error_message = ""
+    run.run_notes = (
+        f"Ejecución SOOI Hybrid {version_label} "
+        f"write={write}; attempted={totals.get('attempted')}; "
+        f"discarded={totals.get('discarded')}; "
+        f"new={run.total_new}; updated={run.total_updated}."
+    )
+    # SR0.3A.2 only projects the already-decided SR0.3A.1 provider outcome.
+    # It neither adds calls nor changes source planning.
+    from .searchrun_governance import project_hard_provider_stop
+    project_hard_provider_stop(run, source_coverage)
+    run.save()
+    return run
+
 def run_search_profile(search_profile: SearchProfile, run: SearchRun | None = None) -> SearchRun:
+    # A governed browser authorization always enters the governed planner.
+    # Browser/provider/model toggles cannot route around its mode and cap.
+    if run is not None and run.governance_enabled:
+        return _run_hybrid_discovery_v2614(
+            search_profile, run=run,
+            use_ai_override=run.search_mode != SearchRun.SearchMode.FREE,
+        )
+    if _sooi_v2614_flag_enabled():
+        return _run_hybrid_discovery_v2614(search_profile, run=run)
     return _run_ai_discovery(search_profile, run=run)

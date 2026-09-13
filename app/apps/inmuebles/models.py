@@ -1,9 +1,15 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from apps.busquedas.models import SearchProfile, SearchRun
 from apps.fuentes.models import Source
 
 class CapturedProperty(models.Model):
+    class AvailabilityVerificationState(models.TextChoices):
+        UNKNOWN = "unknown", "Sin verificar"
+        CONFIRMED = "confirmed", "Disponible"
+        UNAVAILABLE = "unavailable", "No disponible"
+
     class EntryMode(models.TextChoices):
         STRUCTURED_CAPTURE = "structured_capture", "Captación estructurada"
         AI_EXPLORATION = "ai_exploration", "Exploración IA"
@@ -107,6 +113,30 @@ class CapturedProperty(models.Model):
         choices=ReviewStatus.choices,
         default=ReviewStatus.PENDING,
     )
+    availability_verification_state = models.CharField(
+        "disponibilidad",
+        max_length=20,
+        choices=AvailabilityVerificationState.choices,
+        default=AvailabilityVerificationState.UNKNOWN,
+        db_index=True,
+    )
+    availability_verified_at = models.DateTimeField(
+        "disponibilidad verificada en",
+        null=True,
+        blank=True,
+    )
+    availability_verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="availability_verified_captured_properties",
+        verbose_name="disponibilidad verificada por",
+    )
+    availability_verification_note = models.TextField(
+        "nota de verificación",
+        blank=True,
+    )
 
     possible_duplicate = models.BooleanField(
         "posible duplicado",
@@ -146,7 +176,46 @@ class CapturedProperty(models.Model):
             models.Index(fields=["captured_at"]),
             models.Index(fields=["source_external_id"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        availability_verification_state="unknown",
+                        availability_verified_at__isnull=True,
+                        availability_verified_by__isnull=True,
+                    )
+                    | models.Q(
+                        availability_verification_state__in=["confirmed", "unavailable"],
+                        availability_verified_at__isnull=False,
+                        availability_verified_by__isnull=False,
+                    )
+                ),
+                name="capture_availability_verification_consistent",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        is_unknown = (
+            self.availability_verification_state
+            == self.AvailabilityVerificationState.UNKNOWN
+        )
+        has_verification = (
+            self.availability_verified_at is not None
+            and self.availability_verified_by_id is not None
+        )
+        if is_unknown and (
+            self.availability_verified_at is not None
+            or self.availability_verified_by_id is not None
+        ):
+            raise ValidationError(
+                "Una disponibilidad sin verificar no puede tener fecha ni verificador."
+            )
+        if not is_unknown and not has_verification:
+            raise ValidationError(
+                "Una disponibilidad verificada requiere fecha y verificador."
+            )
 
     def __str__(self) -> str:
         return f"{self.title} [{self.source.code}]"
-    
+

@@ -1,0 +1,372 @@
+{% extends "core/base_private.html" %}
+{% load busquedas_format %}
+
+{% block title %}V2.6.1 · {{ profile.name }}{% endblock %}
+
+{% block content %}
+<style>
+  .v261-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .v261-head {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    margin-bottom:18px;
+  }
+  .v261-title h1 {
+    margin:0;
+    font-size:24px;
+  }
+  .v261-title p {
+    margin:6px 0 0;
+    color:#64748b;
+  }
+  .v261-card {
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04);
+  }
+  .v261-form-row {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:end;
+    gap:12px;
+  }
+  .v261-field label {
+    display:block;
+    font-size:12px;
+    color:#475569;
+    margin-bottom:4px;
+  }
+  .v261-field input[type="number"],
+  .v261-field input[type="text"] {
+    border:1px solid #cbd5e1;
+    border-radius:8px;
+    padding:8px 10px;
+    min-width:120px;
+  }
+  .v261-check {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    color:#334155;
+    padding:8px 10px;
+    border:1px solid #e5e7eb;
+    border-radius:8px;
+    background:#f8fafc;
+  }
+  .v261-kpis {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:10px;
+    margin-top:12px;
+  }
+  .v261-kpi {
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    padding:10px;
+    background:#f8fafc;
+  }
+  .v261-kpi strong {
+    display:block;
+    font-size:20px;
+  }
+  .v261-kpi span {
+    color:#64748b;
+    font-size:12px;
+  }
+  .v261-table {
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  .v261-table th,
+  .v261-table td {
+    border-bottom:1px solid #e5e7eb;
+    padding:8px;
+    text-align:left;
+    vertical-align:top;
+  }
+  .v261-table th {
+    background:#f8fafc;
+    color:#334155;
+    font-size:12px;
+  }
+  .v261-badge {
+    display:inline-block;
+    border-radius:999px;
+    padding:3px 8px;
+    font-size:12px;
+    background:#e2e8f0;
+    color:#334155;
+    white-space:nowrap;
+  }
+  .v261-badge.ok { background:#dcfce7; color:#166534; }
+  .v261-badge.warn { background:#fef9c3; color:#854d0e; }
+  .v261-badge.bad { background:#fee2e2; color:#991b1b; }
+  .v261-url {
+    max-width:460px;
+    word-break:break-all;
+    color:#2563eb;
+  }
+  .v261-danger {
+    border-color:#fecaca;
+    background:#fff7f7;
+  }
+  .v261-muted {
+    color:#64748b;
+    font-size:13px;
+  }
+</style>
+
+<div class="v261-wrap">
+  <div class="v261-head">
+    <div class="v261-title">
+      <h1>SOOI V2.6.1 · Cobertura multi-fuente</h1>
+      <p>{{ profile.name }} · {{ profile.province }}{% if profile.zone %} · {{ profile.zone }}{% endif %}</p>
+    </div>
+    <div>
+      <a class="btn" href="/app/busquedas/{{ profile.id }}/">Volver a la búsqueda</a>
+    </div>
+  </div>
+
+  <div class="v261-card">
+    <h2 style="margin-top:0;">Análisis previo</h2>
+    <p class="v261-muted">
+      Ejecuta primero en modo dry-run. No escribe en BD. Después, si el action plan es correcto,
+      puedes confirmar escritura manualmente.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="analyze">
+
+      <div class="v261-form-row">
+        <div class="v261-field">
+          <label>Timeout por fuente</label>
+          <input type="number" name="timeout" value="{{ timeout }}" min="4" max="30">
+        </div>
+
+        <div class="v261-field">
+          <label>Máx. candidatos/fuente</label>
+          <input type="number" name="max_results" value="{{ max_results }}" min="1" max="20">
+        </div>
+
+        {% if search_governance_enabled %}
+        <div class="v261-field">
+          <label>Modo y autorización finita</label>
+          {% for item in governed_modes %}
+            <label style="display:block"><input type="radio" name="search_mode" value="{{ item.mode }}" {% if item.mode == 'free' %}checked{% endif %} {% if not item.permitted %}disabled{% endif %}> {{ item.label }} — {{ item.description }}</label>
+          {% endfor %}
+          <input type="number" name="budget_max_credits" value="0" min="0" step="1" required>
+          <small>Máximo autorizado; puede no usarse por completo.</small>
+        </div>
+        {% else %}<label class="v261-check">
+          <input type="checkbox" name="include_ai" value="1" {% if include_ai %}checked{% endif %}>
+          Incluir OpenAI Web Search para fuentes duras
+        </label>{% endif %}
+
+        <button class="btn btn-primary" type="submit">Analizar V2.6.1</button>
+      </div>
+    </form>
+  </div>
+
+  {% if result %}
+    <div class="v261-card">
+      <h2 style="margin-top:0;">Resumen</h2>
+
+      <div class="v261-muted">
+        Localización resuelta:
+        <strong>{{ result.context.location }}</strong>
+        · scope: <strong>{{ result.context.location_scope }}</strong>
+        · source: <strong>{{ result.context.location_source }}</strong>
+      </div>
+
+      <div class="v261-kpis">
+        <div class="v261-kpi"><strong>{{ result.is_complete }}</strong><span>Completo</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.attempted }}/{{ result.totals.applicable }}</strong><span>Fuentes intentadas</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.actionable }}</strong><span>Válidos</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.review_required }}</strong><span>Para revisar</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.discarded }}</strong><span>Descartados</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.would_create_captured }}</strong><span>Nuevos accionables</span></div>
+        <div class="v261-kpi"><strong>{{ result.totals.skip_duplicate }}</strong><span>Duplicados</span></div>
+      </div>
+      {% if result.coverage_contract %}
+        {% if result.zero_result_recovery %}
+          <p><strong>{{ result.zero_result_recovery.exact_candidate_count }} coincidencias exactas.</strong></p>
+          {% if result.zero_result_recovery.near_match_candidate_count %}
+            <p><strong>{{ result.zero_result_recovery.near_match_candidate_count }} alternativas cercanas.</strong> Cada alternativa muestra el único criterio relajado.</p>
+          {% elif result.zero_result_recovery.fallback_executed and result.zero_result_recovery.exact_candidate_count == 0 %}
+            <p><strong>No se encontraron coincidencias exactas ni alternativas próximas en la cobertura ejecutada.</strong></p>
+          {% endif %}
+        {% endif %}
+        {% if result.quality_semantics %}
+          <p><strong>Calidad:</strong> {{ result.quality_semantics.raw_candidates }} candidatos · {{ result.quality_semantics.actionable_count }} válidos · {{ result.quality_semantics.review_required_count }} para revisar · {{ result.quality_semantics.unavailable_count }} no disponibles · {{ result.quality_semantics.commercial_yield_pct }}% de rendimiento comercial.</p>
+        {% endif %}
+        {% if result.coverage_contract.empty_result_classification == "PARTIAL_EMPTY_RESULT" %}
+          <p><strong>0 resultados en la cobertura ejecutada:</strong> {{ result.coverage_contract.executed_units }} de {{ result.coverage_contract.planned_units }} unidades ({{ result.coverage_contract.coverage_percent_executed }}%). Quedan {{ result.coverage_contract.remaining_units }}.</p>
+        {% elif result.coverage_contract.empty_result_classification == "FULL_PLAN_EMPTY_RESULT" %}
+          <p><strong>0 resultados aceptados tras completar el plan SOOI.</strong></p>
+        {% else %}
+          <p><strong>{{ result.coverage_contract.accepted_candidates }} resultados aceptados en la cobertura ejecutada.</strong></p>
+        {% endif %}
+        <p>{{ result.coverage_contract.calls_succeeded }} llamadas completadas · {{ result.coverage_contract.calls_attempted }} intentadas · {{ result.coverage_contract.planned_calls }} planificadas. {{ result.coverage_contract.market_completeness_disclaimer }}</p>
+      {% endif %}
+    </div>
+
+    <div class="v261-card">
+      <h2 style="margin-top:0;">Cobertura por fuente</h2>
+
+      <table class="v261-table">
+        <thead>
+          <tr>
+            <th>Fuente</th>
+            <th>Método</th>
+            <th>Estado</th>
+            <th>Candidatos</th>
+            <th>Verificados</th>
+            <th>Para revisar</th>
+            <th>Descartados</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in result.source_coverage %}
+            <tr>
+              <td><strong>{{ s.source }}</strong></td>
+              <td>{{ s.method }}</td>
+              <td>
+                <span class="v261-badge {% if s.status == 'success' %}ok{% elif s.status == 'failed' %}bad{% elif s.status == 'not_applicable' %}warn{% endif %}">
+                  {{ s.status }}
+                </span>
+              </td>
+              <td>{{ s.candidate_count }}</td>
+              <td>{{ s.verified }}</td>
+              <td>{{ s.reviewable }}</td>
+              <td>{{ s.discarded }}</td>
+              <td>{{ s.error|default:"" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if result.near_match_candidates %}
+      <div class="v261-card">
+        <h2 style="margin-top:0;">Alternativas cercanas</h2>
+        <p class="v261-muted">No son coincidencias exactas y no se capturan automáticamente.</p>
+        <table class="v261-table">
+          <thead><tr><th>Tipo</th><th>Fuente</th><th>Precio</th><th>Dormitorios</th><th>Motivo</th><th>URL</th></tr></thead>
+          <tbody>
+            {% for item in result.near_match_candidates %}
+              <tr>
+                <td><span class="v261-badge warn">ALTERNATIVA</span></td>
+                <td>{{ item.provider }}</td>
+                <td>{{ item.price|default:"" }}</td>
+                <td>{{ item.bedrooms|default:"" }}</td>
+                <td>{{ item.alternative_label }} · {{ item.relaxation_reason }}</td>
+                <td class="v261-url"><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.url }}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <div class="v261-card">
+      <h2 style="margin-top:0;">Coincidencias exactas</h2>
+
+      {% if result.action_plan.actions %}
+        <table class="v261-table">
+          <thead>
+            <tr>
+              <th>Fuente</th>
+              <th>Estado</th>
+              <th>Acción</th>
+              <th>ID existente</th>
+              <th>Precio</th>
+              <th>Nota</th>
+              <th>URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in result.action_plan.actions %}
+              <tr>
+                <td><strong>{{ a.source }}</strong></td>
+                <td>
+                  <span class="v261-badge {{ a.classification|result_confidence_kind }}">{% if a.actionability %}{{ a.actionability.customer_label }}{% else %}{{ a.classification|result_confidence_label }}{% endif %}</span>
+                </td>
+                <td>
+                  <span class="v261-badge {% if a.action == 'would_create_captured' or a.action == 'would_create_in_review' %}ok{% elif a.action == 'skip_discarded' %}bad{% elif a.action == 'skip_duplicate' %}warn{% endif %}">
+                    {{ a.action|result_action_label }}
+                  </span>
+                </td>
+                <td>{{ a.existing_capture_id|default:"" }}</td>
+                <td>{{ a.price|default:"" }}</td>
+                <td>
+                  {% with confidence_message=a.reason|result_confidence_message %}
+                    {% if confidence_message %}<div class="v261-muted">{{ confidence_message }}</div>{% endif %}
+                  {% endwith %}
+                </td>
+                <td class="v261-url">
+                  {% if a.url %}
+                    <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.url }}</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="v261-muted">No hay acciones previstas.</p>
+      {% endif %}
+    </div>
+
+    {% if not result.write %}
+      <div class="v261-card v261-danger">
+        <h2 style="margin-top:0;">Escritura controlada</h2>
+        <p class="v261-muted">
+          La escritura vuelve a ejecutar V2.6.1 con los mismos parámetros. Solo crea candidatos permitidos
+          por el quality gate y omite descartados/duplicados.
+        </p>
+
+        <form method="post" onsubmit="return confirm('¿Ejecutar escritura controlada V2.6.1?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="write">
+          <input type="hidden" name="timeout" value="{{ timeout }}">
+          <input type="hidden" name="max_results" value="{{ max_results }}">
+          {% if include_ai %}
+            <input type="hidden" name="include_ai" value="1">
+          {% endif %}
+
+          <div class="v261-form-row">
+            <div class="v261-field">
+              <label>Confirmación textual</label>
+              <input type="text" name="confirm_write" placeholder="ESCRIBIR">
+            </div>
+            <button class="btn btn-primary" type="submit">Confirmar escritura V2.6.1</button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+
+    {% if result.write_result %}
+      <div class="v261-card">
+        <h2 style="margin-top:0;">Resultado de escritura</h2>
+        <div class="v261-kpis">
+          <div class="v261-kpi"><strong>{{ result.write_result.created }}</strong><span>Creadas</span></div>
+          <div class="v261-kpi"><strong>{{ result.write_result.updated }}</strong><span>Actualizadas</span></div>
+          <div class="v261-kpi"><strong>{{ result.write_result.skipped }}</strong><span>Omitidas</span></div>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

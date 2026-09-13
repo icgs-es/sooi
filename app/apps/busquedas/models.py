@@ -1,7 +1,35 @@
 from django.db import models
 from django.conf import settings
 
+
+class GeographicArea(models.Model):
+    class AreaType(models.TextChoices):
+        COMARCA = "comarca", "Comarca"
+        CUSTOM = "custom", "Zona personalizada"
+
+    name = models.CharField("nombre", max_length=150)
+    area_type = models.CharField("tipo", max_length=20, choices=AreaType.choices)
+    province = models.CharField("provincia", max_length=100)
+    municipalities = models.JSONField("municipios", default=list)
+    is_active = models.BooleanField("activa", default=True)
+
+    class Meta:
+        verbose_name = "Área geográfica"
+        verbose_name_plural = "Áreas geográficas"
+        ordering = ["province", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["province", "name"], name="unique_geographic_area_name_per_province"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.province})"
+
 class SearchProfile(models.Model):
+    class GeographyScope(models.TextChoices):
+        MUNICIPALITY = "municipality", "Un municipio"
+        MULTI_MUNICIPALITY = "multi_municipality", "Varios municipios"
+        NAMED_AREA = "named_area", "Comarca o zona guardada"
+        PROVINCE = "province", "Toda la provincia"
     class OperationType(models.TextChoices):
         SALE = "sale", "Venta"
         RENT = "rent", "Alquiler"
@@ -36,6 +64,15 @@ class SearchProfile(models.Model):
     )
     province = models.CharField("provincia", max_length=100)
     zone = models.CharField("zona / municipio", max_length=150, blank=True)
+    geography_scope = models.CharField(
+        "ámbito geográfico", max_length=30, choices=GeographyScope.choices, blank=True,
+        help_text="Vacío indica un perfil antiguo que todavía se resuelve desde zona.",
+    )
+    municipalities = models.JSONField("municipios seleccionados", default=list, blank=True)
+    geographic_area = models.ForeignKey(
+        GeographicArea, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="search_profiles", verbose_name="comarca o zona guardada",
+    )
     property_types = models.JSONField("tipos de propiedad", default=list, blank=True)
     min_price = models.DecimalField("precio mínimo", max_digits=12, decimal_places=2, null=True, blank=True)
     max_price = models.DecimalField("precio máximo", max_digits=12, decimal_places=2, null=True, blank=True)
@@ -109,6 +146,29 @@ class SearchProfile(models.Model):
         values = self.property_types or []
         return ", ".join(labels.get(v, v) for v in values)
 
+    def canonical_search_locations(self):
+        """Canonical geography first; legacy zone is intentionally last."""
+        if self.geography_scope == self.GeographyScope.PROVINCE:
+            return []
+        if self.geography_scope == self.GeographyScope.NAMED_AREA and self.geographic_area_id:
+            return list(self.geographic_area.municipalities or [])
+        if self.geography_scope in {self.GeographyScope.MUNICIPALITY, self.GeographyScope.MULTI_MUNICIPALITY}:
+            return list(self.municipalities or [])
+        return [part.strip() for part in (self.zone or "").split(",") if part.strip()]
+
+    def resolved_search_geography(self):
+        """Opt-in runtime view; raw model fields remain untouched."""
+        from .geography_runtime import resolve_profile_geography
+        return resolve_profile_geography(self)
+
+    def geography_display(self):
+        if self.geography_scope == self.GeographyScope.PROVINCE:
+            return f"Toda la provincia de {self.province}"
+        if self.geography_scope == self.GeographyScope.NAMED_AREA and self.geographic_area_id:
+            return self.geographic_area.name
+        locations = self.canonical_search_locations()
+        return ", ".join(locations) if locations else (self.zone or self.province)
+
 
 class SearchRun(models.Model):
     class Status(models.TextChoices):
@@ -123,6 +183,35 @@ class SearchRun(models.Model):
         AI_DISCOVERY = "ai_discovery", "Exploración IA"
         PORTAL = "portal", "Portal"
         EMAIL = "email", "Email"
+
+    class SearchMode(models.TextChoices):
+        LEGACY = "legacy", "No gobernada (histórica)"
+        FREE = "free", "Free"
+        ECO = "eco", "Eco"
+        AMPLIA = "amplia", "Amplia"
+        PROFUNDA = "profunda", "Profunda"
+
+    class CoverageStatus(models.TextChoices):
+        NOT_EVALUATED = "not_evaluated", "No evaluada / histórica"
+        FULL = "full", "Completa"
+        PARTIAL = "partial", "Parcial"
+        LIMITED_BY_PLAN = "limited_by_plan", "Limitada por plan"
+        LIMITED_BY_BUDGET = "limited_by_budget", "Limitada por presupuesto"
+        DEGRADED_PROVIDER = "degraded_provider", "Proveedor degradado"
+        NO_RESULTS = "no_results", "Sin resultados"
+        FAILED = "failed", "Fallida"
+
+    class StopReason(models.TextChoices):
+        NONE = "none", "Sin motivo / no establecido"
+        SUFFICIENT_COVERAGE = "sufficient_coverage", "Cobertura suficiente"
+        BUDGET_EXHAUSTED = "budget_exhausted", "Presupuesto agotado"
+        PROVIDER_HARD_FAILURE = "provider_hard_failure", "Fallo duro del proveedor"
+        PROVIDER_OUTAGE = "provider_outage", "Caída del proveedor"
+        NO_APPLICABLE_SOURCES = "no_applicable_sources", "Sin fuentes aplicables"
+        PLAN_LIMIT = "plan_limit", "Límite del plan"
+        USER_CANCELLED = "user_cancelled", "Cancelada por el usuario"
+        COMPLETED_PLAN = "completed_plan", "Plan completado"
+        FAILED_INTERNAL = "failed_internal", "Fallo interno"
 
     search_profile = models.ForeignKey(
         SearchProfile,
@@ -165,6 +254,37 @@ class SearchRun(models.Model):
 
     run_notes = models.TextField("notas de ejecución", blank=True)
 
+    # SR0.3A.2: additive governance snapshot. Legacy rows deliberately remain
+    # distinguishable from governed searches.
+    governance_enabled = models.BooleanField(default=False)
+    governance_version = models.CharField(max_length=20, blank=True)
+    search_mode = models.CharField(
+        max_length=20, choices=SearchMode.choices, default=SearchMode.LEGACY,
+    )
+    coverage_status = models.CharField(
+        max_length=30, choices=CoverageStatus.choices, default=CoverageStatus.NOT_EVALUATED,
+    )
+    stop_reason = models.CharField(
+        max_length=30, choices=StopReason.choices, default=StopReason.NONE,
+    )
+    budget_max_credits = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    budget_reserved_credits = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    budget_consumed_credits = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    sources_planned = models.PositiveIntegerField(default=0)
+    sources_executed = models.PositiveIntegerField(default=0)
+    sources_omitted = models.PositiveIntegerField(default=0)
+    calls_planned = models.PositiveIntegerField(default=0)
+    calls_attempted = models.PositiveIntegerField(default=0)
+    calls_succeeded = models.PositiveIntegerField(default=0)
+    cache_hits = models.PositiveIntegerField(default=0)
+    estimated_internal_cost = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    actual_internal_cost = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    search_fingerprint = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    reused_from_search_run = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reuse_runs",
+    )
+
     created_at = models.DateTimeField("creado", auto_now_add=True)
     updated_at = models.DateTimeField("actualizado", auto_now=True)
 
@@ -176,6 +296,31 @@ class SearchRun(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["execution_mode"]),
             models.Index(fields=["created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(governance_enabled=False)
+                    | models.Q(budget_max_credits__isnull=True)
+                    | (
+                        models.Q(budget_reserved_credits__isnull=False)
+                        & models.Q(budget_reserved_credits__lte=models.F("budget_max_credits"))
+                    )
+                ),
+                name="searchrun_reserved_lte_max",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(governance_enabled=False)
+                    | models.Q(budget_max_credits__isnull=True)
+                    | (
+                        models.Q(budget_reserved_credits__isnull=False)
+                        & models.Q(budget_consumed_credits__isnull=False)
+                        & models.Q(budget_consumed_credits__lte=models.F("budget_reserved_credits"))
+                    )
+                ),
+                name="searchrun_consumed_lte_reserved",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -1,9 +1,34 @@
 {% extends "core/base_private.html" %}
+{% load busquedas_format %}
 
 {% block title %}Detalle búsqueda | SOOI{% endblock %}
 {% block section_title %}Detalle de búsqueda{% endblock %}
 
 {% block content %}
+  <style>
+    .search-summary-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px; margin-top:14px; }
+    .search-summary-item { min-width:0; }
+    .search-summary-item strong { display:block; font-size:12px; color:#64748b; margin-bottom:4px; }
+    .search-summary-item p { margin:0; }
+    .search-geography-unit { margin-top:8px; padding:9px 11px; border-radius:9px; background:#f8fafc; }
+    .search-levels { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin:16px 0; }
+    .search-level-card { display:block; position:relative; padding:16px; border:1px solid #dbe3ee; border-radius:12px; background:#fff; cursor:pointer; }
+    .search-level-card:has(input:checked) { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.12); }
+    .search-level-card input { margin:0 7px 0 0; }
+    .search-level-title { font-size:16px; }
+    .search-level-cost { display:block; margin:10px 0 6px; font-weight:700; color:#0f172a; }
+    .search-level-copy { display:block; color:#475569; font-size:13px; line-height:1.4; }
+    .search-recommended { display:inline-block; margin-left:6px; padding:3px 7px; border-radius:999px; background:#dcfce7; color:#166534; font-size:11px; font-weight:700; }
+    .search-balance { margin:12px 0; padding:10px 12px; border-radius:10px; background:#f8fafc; font-weight:700; }
+    .search-tech-details { margin:14px 0; border-top:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:10px 0; }
+    .search-tech-details summary { cursor:pointer; font-weight:700; color:#334155; }
+    .search-tech-level { margin:12px 0; padding-left:12px; border-left:3px solid #e2e8f0; }
+    .search-budget-field { display:block; max-width:360px; margin:14px 0; font-weight:700; }
+    .search-budget-field input { display:block; width:100%; box-sizing:border-box; margin-top:6px; padding:10px; border:1px solid #cbd5e1; border-radius:8px; }
+    .search-budget-help, .search-cta-help { display:block; margin-top:5px; color:#64748b; font-size:12px; font-weight:400; }
+    @media (max-width:900px) { .search-levels { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+    @media (max-width:640px) { .search-summary-grid, .search-levels { grid-template-columns:1fr; } }
+  </style>
   <div class="page-card">
     <h1>{{ profile.name }}</h1>
     <p>Expediente operativo de búsqueda: captaciones, oportunidades, ejecuciones y desenlace.</p>
@@ -12,13 +37,77 @@
       {% include "seguimiento/_search_badge.html" with search_profile=profile %}
     </div>
 
+    <section aria-labelledby="search-summary-title" style="margin-top:20px;">
+      <h2 id="search-summary-title" style="font-size:20px; margin:0;">Tu búsqueda</h2>
+      <div class="search-summary-grid">
+        <div class="search-summary-item"><strong>Operación</strong><p>{{ profile.get_operation_type_display }}</p></div>
+        <div class="search-summary-item"><strong>Tipo</strong><p>{% if profile.property_types %}{{ profile.property_types_display }}{% else %}—{% endif %}</p></div>
+        <div class="search-summary-item"><strong>Precio</strong><p>{% if profile.max_price %}Hasta {{ profile.max_price|euro }}{% else %}—{% endif %}</p></div>
+        <div class="search-summary-item"><strong>Dormitorios</strong><p>{% if profile.min_bedrooms %}Desde {{ profile.min_bedrooms }}{% else %}—{% endif %}</p></div>
+        <div class="search-summary-item"><strong>Provincia</strong><p>{{ profile.province }}</p></div>
+        <div class="search-summary-item"><strong>Ámbito geográfico</strong><p>{{ profile.geography_display|default:"—" }}</p></div>
+      </div>
+      {% if geography_runtime %}{% for unit in geography_runtime.units %}
+        <div class="search-geography-unit">
+          {{ unit.raw_value }}
+          {% if unit.resolution_status == "ALIAS_RESOLVED" %}→ {{ unit.canonical_name }} <span style="padding:2px 7px; border-radius:999px; background:#dcfce7; color:#166534;">Alias reconocido</span>
+          {% elif unit.resolution_status == "EXACT" %}<span style="padding:2px 7px; border-radius:999px; background:#dbeafe; color:#1e40af;">Ubicación verificada</span>
+          {% elif unit.resolution_status == "UNRESOLVED" %}<span style="padding:2px 7px; border-radius:999px; background:#f1f5f9; color:#475569;">Ubicación sin normalizar</span><small style="display:block; color:#64748b;">Se utilizará el término introducido.</small>
+          {% else %}<small style="display:block; color:#92400e;">No se ha podido verificar esta ubicación; revisa el término y la provincia.</small>{% endif %}
+          {% if unit.territorial_label %}<small style="display:block; color:#64748b;">{{ unit.territorial_label }}</small>{% endif %}
+        </div>
+      {% endfor %}{% endif %}
+    </section>
+
     <div class="actions" style="margin-top:18px;">
       <a class="btn" href="/app/busquedas/">Volver a búsquedas</a>
       <a class="btn" href="/app/busquedas/{{ profile.id }}/editar/">Editar búsqueda</a>
+      <a class="btn btn-primary" href="/app/busquedas/{{ profile.id }}/v261/">Análisis V2.6.1</a>
       <a class="btn" href="/app/captacion/?search_profile_id={{ profile.id }}">Ver captaciones</a>
       <a class="btn" href="/app/oportunidades/?search_profile_id={{ profile.id }}">Ver oportunidades</a>
 
       {% if profile.status == "active" %}
+      {% if search_governance_enabled %}
+      <div style="width:100%; margin:14px 0; padding:16px; border:1px solid #dbe3ee; border-radius:12px;">
+        <h2 style="font-size:20px; margin:0 0 8px;">Elige el nivel de búsqueda</h2>
+        <p>Decide cuánto quieres que SOOI amplíe la búsqueda. Nunca se utilizarán más créditos de los autorizados.</p>
+        <form id="run-search-form" method="post" action="{% url 'searchprofile_execute' profile.id %}">
+          {% csrf_token %}
+          {% for item in governed_modes %}{% if forloop.first and item.available_credit_balance is not None %}<p class="search-balance">Saldo disponible: {{ item.available_credit_balance }} Créditos de Búsqueda</p>{% endif %}{% endfor %}
+          <div class="search-levels">
+          {% for item in governed_modes %}
+          <label class="search-level-card">
+            <input type="radio" name="search_mode" value="{{ item.mode }}" data-budget="{{ item.default_authorization }}" {% if item.mode == 'free' %}checked{% endif %} {% if not item.permitted %}disabled{% endif %}>
+            <strong class="search-level-title">{{ item.label }}</strong>{% if item.mode == 'eco' %}<span class="search-recommended">Recomendado</span>{% endif %}
+            <span class="search-level-cost">{% if item.mode == 'free' %}Sin coste{% else %}Hasta {{ item.default_authorization }} Créditos de Búsqueda{% endif %}</span>
+            <span class="search-level-copy">{% if item.mode == 'free' %}Búsqueda básica con fuentes disponibles.{% elif item.mode == 'eco' %}Buena cobertura con consumo reducido.{% elif item.mode == 'amplia' %}Mayor cobertura y más fuentes.{% else %}Máxima cobertura disponible.{% endif %}</span>
+            {% if not item.permitted %}<small class="search-budget-help">{{ item.denied_reason }}</small>{% endif %}
+          </label>
+          {% endfor %}
+          </div>
+          <details class="search-tech-details">
+            <summary>Ver detalle técnico</summary>
+            {% for item in governed_modes %}
+              <div class="search-tech-level">
+                <strong>{{ item.label }}</strong> — {{ item.description }}
+                <br><small>Máximo: {{ item.maximum_external_calls }} expansiones externas; {{ item.maximum_external_sources }} fuentes externas.</small>
+                {% if item.mode == "eco" and item.eco_one_credit_coverage_plan.planned_units %}
+                  <br><small>Con 1 Crédito de Búsqueda: {{ item.eco_one_credit_coverage_plan.planned_calls }} lote externo consolidado; {{ item.eco_one_credit_coverage_plan.scheduled_units }} de {{ item.eco_one_credit_coverage_plan.planned_units }} ubicaciones ({{ item.eco_one_credit_coverage_plan.coverage_percent_planned }}%).</small>
+                {% elif item.coverage_plan.planned_units %}<br><small>Estimación: {{ item.coverage_plan.authorized_calls }} de {{ item.coverage_plan.planned_calls }} lotes; {{ item.coverage_plan.scheduled_units }} de {{ item.coverage_plan.planned_units }} ubicaciones ({{ item.coverage_plan.coverage_percent_planned }}%). Se requieren {{ item.coverage_plan.credits_required_for_full_plan }} Créditos de Búsqueda para el plan completo.</small>{% endif %}
+                {% if item.partial_warning %}<br><small>Cobertura potencialmente parcial: la parada adaptativa puede dejar unidades sin ejecutar.</small>{% endif %}
+              </div>
+            {% endfor %}
+            <p><small>El 100% se refiere al plan SOOI mostrado; no garantiza cubrir todo el mercado.</small></p>
+          </details>
+          <label class="search-budget-field">Créditos máximos para esta ejecución
+            <input type="number" name="budget_max_credits" value="0" min="0" step="1" required>
+            <small class="search-budget-help">SOOI nunca utilizará más del máximo autorizado para esta ejecución.</small>
+          </label>
+          <button id="run-search-btn" class="btn btn-primary" type="submit">Buscar ahora</button>
+          <small class="search-cta-help">Se respetará el límite de créditos autorizado.</small>
+        </form>
+      </div>
+      {% else %}
       <form id="run-search-form" method="post" action="/app/busquedas/{{ profile.id }}/ejecutar/" style="display:inline-flex; align-items:center; gap:12px;">
         {% csrf_token %}
         <button id="run-search-btn" class="btn btn-primary" type="submit">
@@ -38,6 +127,7 @@
           Exploración profunda en curso…
         </span>
       </form>
+      {% endif %}
 
       <form method="post" action="/app/busquedas/{{ profile.id }}/pausar/" style="display:inline;">
         {% csrf_token %}
@@ -85,7 +175,7 @@
     </div>
     <div class="quick-card">
       <h3>Precio máximo</h3>
-      <p>{% if profile.max_price %}{{ profile.max_price }} €{% else %}—{% endif %}</p>
+      <p>{% if profile.max_price %}{{ profile.max_price|euro }}{% else %}—{% endif %}</p>
     </div>
   </div>
 
@@ -101,40 +191,11 @@
   </div>
   {% endif %}
 
-  <div class="page-card" style="margin-top:18px;">
-    <h1 style="font-size:22px;">Criterios de búsqueda</h1>
-
-    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-top:14px;">
-      <div>
-        <strong>Provincia</strong>
-        <p style="margin-top:6px;">{{ profile.province }}</p>
-      </div>
-      <div>
-        <strong>Zona / municipio</strong>
-        <p style="margin-top:6px;">{{ profile.zone|default:"—" }}</p>
-      </div>
-      <div>
-        <strong>Operación</strong>
-        <p style="margin-top:6px;">{{ profile.get_operation_type_display }}</p>
-      </div>
-      <div>
-        <strong>Tipos</strong>
-        <p style="margin-top:6px;">{% if profile.property_types %}{{ profile.property_types_display }}{% else %}—{% endif %}</p>
-      </div>
-      <div>
-        <strong>Dormitorios mín.</strong>
-        <p style="margin-top:6px;">{% if profile.min_bedrooms %}{{ profile.min_bedrooms }}{% else %}—{% endif %}</p>
-      </div>
-      <div>
-        <strong>Creada</strong>
-        <p style="margin-top:6px;">{{ profile.created_at|date:"d/m/Y H:i" }}</p>
-      </div>
-      <div style="grid-column:1 / -1;">
-        <strong>Texto guía IA</strong>
-        <p style="margin-top:6px; white-space:pre-line;">{{ profile.ai_prompt|default:"—" }}</p>
-      </div>
-    </div>
-  </div>
+  <details class="page-card" style="margin-top:18px;">
+    <summary style="font-weight:700; cursor:pointer;">Más información de la búsqueda</summary>
+    <p><strong>Creada:</strong> {{ profile.created_at|date:"d/m/Y H:i" }}</p>
+    <p><strong>Texto guía IA:</strong><br>{{ profile.ai_prompt|default:"—"|linebreaksbr }}</p>
+  </details>
 
   <div class="page-card" style="margin-top:18px;">
     <h1 style="font-size:22px;">Últimas captaciones de esta búsqueda</h1>
@@ -163,7 +224,7 @@
                 </td>
                 <td style="padding:12px;">{{ item.source.name }}</td>
                 <td style="padding:12px;">{{ item.municipality|default:"—" }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}</td>
-                <td style="padding:12px;">{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.price %}{{ item.price|euro }}{% else %}—{% endif %}</td>
                 <td style="padding:12px;">{{ item.get_status_display }}</td>
               </tr>
             {% endfor %}
@@ -202,7 +263,7 @@
                 </td>
                 <td style="padding:12px;">{{ item.get_status_display }}</td>
                 <td style="padding:12px;">{{ item.get_priority_display }}</td>
-                <td style="padding:12px;">{% if item.asking_price_current %}{{ item.asking_price_current }} €{% else %}—{% endif %}</td>
+                <td style="padding:12px;">{% if item.asking_price_current %}{{ item.asking_price_current|euro }}{% else %}—{% endif %}</td>
                 <td style="padding:12px;">{% if item.main_contact %}{{ item.main_contact.full_name }}{% else %}—{% endif %}</td>
                 <td style="padding:12px;">{% if item.broker_company %}{{ item.broker_company.name }}{% else %}—{% endif %}</td>
                 <td style="padding:12px;">
@@ -238,10 +299,10 @@
               <th style="padding:12px;">Fecha</th>
               <th style="padding:12px;">Estado</th>
               <th style="padding:12px;">Modo</th>
-              <th style="padding:12px;">Proveedor</th>
-              <th style="padding:12px;">Modelo</th>
+              {% if not search_governance_enabled %}<th style="padding:12px;">Proveedor</th><th style="padding:12px;">Modelo</th>{% endif %}
               <th style="padding:12px;">Candidatos</th>
               <th style="padding:12px;">Válidos</th>
+              <th style="padding:12px;">Para revisar</th>
               <th style="padding:12px;">Nuevos</th>
               <th style="padding:12px;">Descartes</th>
             </tr>
@@ -249,14 +310,16 @@
           <tbody>
             {% for run in runs %}
               <tr style="border-bottom:1px solid #eef2f7;">
-                <td style="padding:12px;">{{ run.created_at|date:"d/m/Y H:i" }}</td>
+                <td style="padding:12px;"><a href="{% url 'searchrun_detail' run.id %}">{{ run.created_at|date:"d/m/Y H:i" }}</a></td>
                 <td style="padding:12px;">
-                  {% if run.status == "running" %}
+                  {% if run.customer_status.kind == "partial" %}
+                    <span class="run-status-badge run-status-badge--completed">{{ run.customer_status.label }}</span>
+                  {% elif run.status == "running" %}
                     <span class="run-status-badge run-status-badge--running">{{ run.get_status_display }}</span>
                   {% elif run.status == "pending" %}
                     <span class="run-status-badge run-status-badge--pending">{{ run.get_status_display }}</span>
                   {% elif run.status == "failed" %}
-                    <span class="run-status-badge run-status-badge--error">{{ run.get_status_display }}</span>
+                    <span class="run-status-badge run-status-badge--error">{{ run.customer_status.label }}</span>
                   {% elif run.status == "completed" %}
                     <span class="run-status-badge run-status-badge--completed">{{ run.get_status_display }}</span>
                   {% else %}
@@ -264,11 +327,11 @@
                   {% endif %}
                 </td>
                 <td style="padding:12px;">{{ run.get_execution_mode_display }}</td>
-                <td style="padding:12px;">{{ run.provider|default:"—" }}</td>
-                <td style="padding:12px;">{{ run.model_name|default:"—" }}</td>
+                {% if not search_governance_enabled %}<td style="padding:12px;">{{ run.provider|default:"—" }}</td><td style="padding:12px;">{{ run.model_name|default:"—" }}</td>{% endif %}
                 <td style="padding:12px;">{{ run.total_candidates }}</td>
-                <td style="padding:12px;">{{ run.total_valid_candidates }}</td>
-                <td style="padding:12px;">{{ run.total_new }}</td>
+                <td style="padding:12px;">{{ run.customer_valid_count }}</td>
+                <td style="padding:12px;">{{ run.customer_review_count }}</td>
+                <td style="padding:12px;">{{ run.customer_new_count }}</td>
                 <td style="padding:12px;">{{ run.total_errors }}</td>
               </tr>
             {% endfor %}
@@ -286,7 +349,13 @@
       const button = document.getElementById("run-search-btn");
       const status = document.getElementById("run-search-status");
 
-      if (!form || !button || !status) return;
+      if (!form || !button) return;
+
+      const budget = form.querySelector('[name="budget_max_credits"]');
+      form.querySelectorAll('[name="search_mode"]').forEach(function (mode) {
+        mode.addEventListener("change", function () { if (budget) budget.value = mode.dataset.budget; });
+      });
+      if (!status) return;
 
       form.addEventListener("submit", function (event) {
         event.preventDefault();

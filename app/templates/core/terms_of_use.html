@@ -1,62 +1,110 @@
-{% extends "core/base_public.html" %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Términos de uso | SOOI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      background: #f4f7fb;
+      color: #0f172a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 32px auto;
+      padding: 42px;
+      background: #fff;
+      border: 1px solid #dfe6ef;
+      border-radius: 22px;
+    }
+    a { color: #3447e6; }
+    h1 { font-size: 40px; line-height: 1.1; margin: 16px 0 12px; }
+    h2 { margin-top: 30px; font-size: 24px; }
+    p { color: #334155; font-size: 17px; }
+    .back { color: #64748b; text-decoration: none; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="/">← Volver a SOOI</a>
 
-{% block title %}Términos de uso | SOOI{% endblock %}
+    <h1>Términos de uso</h1>
+    <p>Última actualización: mayo de 2026.</p>
 
-{% block content %}
-<div style="min-height:100vh; background:#f4f7fb; padding:56px 20px; color:#0f172a;">
-  <div style="max-width:880px; margin:0 auto;">
-    <div style="background:#fff; border:1px solid #dbe3ee; border-radius:24px; padding:34px;">
-      <a href="/" style="color:#64748b; text-decoration:none; font-weight:700;">← Volver a SOOI</a>
+    <h2>1. Objeto</h2>
+    <p>
+      SOOI es un sistema operativo de oportunidades inmobiliarias orientado a organizar
+      búsquedas, captaciones, oportunidades, tareas, alertas y seguimiento operativo.
+      La solución es titularidad de <strong>ICGS Gestión &amp; Servicios S.L.</strong>.
+    </p>
 
-      <h1 style="margin:24px 0 12px; font-size:38px;">Términos de uso</h1>
-      <p style="color:#64748b;">Última actualización: mayo de 2026.</p>
+    <h2>2. Ámbito territorial</h2>
+    <p>
+      SOOI está diseñado inicialmente para operar con oportunidades inmobiliarias situadas
+      en España. La estructura de provincias, municipios, búsquedas y fuentes está orientada
+      al mercado español.
+    </p>
+    <p>
+      El uso de SOOI para inmuebles ubicados fuera de España puede requerir adaptaciones
+      funcionales, territoriales, comerciales o normativas. SOOI no garantiza actualmente
+      cobertura completa fuera del mercado español.
+    </p>
 
-      <h2>1. Objeto</h2>
-      <p>
-        SOOI es un sistema operativo de oportunidades inmobiliarias orientado a organizar búsquedas, captaciones,
-        oportunidades, tareas y alertas de seguimiento.
-      </p>
+    <h2>3. Uso permitido</h2>
+    <p>
+      El usuario se compromete a utilizar SOOI de forma lícita, responsable y respetando
+      los derechos de terceros, las condiciones de las fuentes consultadas y la normativa aplicable.
+    </p>
 
-      <h2>2. Uso permitido</h2>
-      <p>
-        El usuario se compromete a utilizar SOOI de forma lícita, responsable y respetando los derechos de terceros,
-        las condiciones de las fuentes consultadas y la normativa aplicable.
-      </p>
+    <h2>4. Fuentes externas</h2>
+    <p>
+      SOOI puede registrar URLs, referencias y datos operativos aportados por el usuario.
+      El sistema no debe usarse para copiar, replicar, republicar, explotar masivamente
+      o vulnerar condiciones de uso de portales inmobiliarios, fuentes externas o terceros.
+    </p>
 
-      <h2>3. Fuentes externas</h2>
-      <p>
-        SOOI puede registrar URLs, referencias y datos operativos aportados por el usuario. El sistema no debe usarse para
-        replicar, republicar o explotar masivamente contenido de portales inmobiliarios sin autorización.       </p>
+    <h2>5. IA como apoyo</h2>
+    <p>
+      Las funciones de inteligencia artificial son herramientas de apoyo. Sus resultados
+      pueden contener errores, omisiones o información incompleta y deben ser revisados
+      por el usuario antes de tomar decisiones comerciales, jurídicas, financieras o de inversión.
+    </p>
 
-      <h2>4. IA como apoyo</h2>
-      <p>
-        Las funciones de inteligencia artificial son herramientas de apoyo. Sus resultados deben ser revisados por el usuario
-        antes de tomar decisiones comerciales, jurídicas, financieras o de inversión.       </p>
+    <h2>6. Responsabilidad del usuario</h2>
+    <p>
+      El usuario es responsable de la veracidad de los datos que introduce, de las decisiones
+      que adopta y de cumplir las condiciones de uso de portales, fuentes externas,
+      canales de contacto y normativa aplicable.
+    </p>
 
-      <h2>5. Responsabilidad del usuario</h2>
-      <p>
-        El usuario es responsable de la veracidad de los datos que introduce, de las decisiones que adopta y de cumplir las
-        condiciones de uso de portales, fuentes externas y canales de contacto.
-      </p>
+    <h2>7. Planes, créditos y uso de IA</h2>
+    <p>
+      SOOI puede ofrecer planes comerciales con límites de búsquedas activas, créditos IA
+      y capacidad operativa mensual. El uso de IA está sujeto a cupos para mantener un servicio
+      controlado, sostenible y seguro.
+    </p>
 
-      <h2>6. Disponibilidad</h2>
-      <p>
-        SOOI se presta en fase de evolución continua. Se realizarán esfuerzos razonables para mantener el servicio disponible,
-        seguro y actualizado.
-      </p>
+    <h2>8. Disponibilidad</h2>
+    <p>
+      SOOI se presta como servicio en evolución. Se realizarán esfuerzos razonables para mantener
+      el servicio disponible, seguro y actualizado, sin perjuicio de interrupciones por mantenimiento,
+      incidencias técnicas o dependencia de proveedores externos.
+    </p>
 
-      <h2>7. Soporte</h2>
-      <p>
-        Para consultas operativas o comerciales puedes escribir a
-        <a href="mailto:info@sooi.io">info@sooi.io</a>.
-      </p>
-    </div>
-  </div>
-</div>
+    <h2>9. Soporte</h2>
+    <p>
+      Para consultas operativas, legales o comerciales puedes escribir a
+      <a href="mailto:info@icgs.es">info@icgs.es</a>.
+    </p>
 
-<style>
-  h2 { margin-top:28px; font-size:22px; }
-  p { color:#475569; line-height:1.7; }
-  a { color:#2563eb; }
-</style>
-{% endblock %}
+    <h2>10. Cambios</h2>
+    <p>
+      ICGS Gestión &amp; Servicios S.L. podrá actualizar estos términos para reflejar cambios
+      funcionales, comerciales, técnicos o normativos del servicio.
+    </p>
+  </main>
+</body>
+</html>

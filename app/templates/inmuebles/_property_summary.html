@@ -1,0 +1,80 @@
+<article class="property-summary{% if compact %} property-summary--compact{% else %} property-summary--detail{% endif %}">
+  <div class="property-summary__main">
+    <div class="property-summary__identity">
+      {% if property_url %}
+        <a class="property-summary__title" href="{{ property_url }}">{{ capture.title }}</a>
+      {% else %}
+        <h1 class="property-summary__title">{{ capture.title }}</h1>
+      {% endif %}
+
+      <div class="property-summary__location">
+        {% if capture.municipality %}
+          {{ capture.municipality }}{% if capture.province %} · {{ capture.province }}{% endif %}
+        {% elif capture.zone_text %}
+          {{ capture.zone_text }}{% if capture.province %} · {{ capture.province }}{% endif %}
+        {% elif capture.province %}
+          {{ capture.province }}
+        {% else %}
+          Ubicación no indicada
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="property-summary__facts" aria-label="Características del inmueble">
+      <span>{{ capture.get_operation_type_display }}</span>
+      <span>{{ capture.get_property_type_display }}</span>
+      {% if capture.area_m2 %}<span>{{ capture.area_m2|floatformat:0 }} m²</span>{% endif %}
+      {% if capture.bedrooms is not None %}<span>{{ capture.bedrooms }} hab.</span>{% endif %}
+      {% if capture.bathrooms is not None %}<span>{{ capture.bathrooms }} baños</span>{% endif %}
+    </div>
+
+    <div class="property-summary__states" aria-label="Disponibilidad del inmueble">
+      <span class="property-summary__badge property-summary__badge--availability property-summary__badge--availability-{{ capture.availability_verification_state }}">
+        Disponibilidad: {{ capture.get_availability_verification_state_display }}
+      </span>
+      {% if capture.possible_duplicate %}
+        <span class="property-summary__badge property-summary__badge--warning">Posible duplicado</span>
+      {% endif %}
+    </div>
+
+    <div class="property-summary__context">
+      {% if capture.source %}
+        <span>Fuente: <strong>{{ capture.source.name }}</strong></span>
+      {% endif %}
+      {% if capture.search_profile %}
+        <span>Encontrado en: <strong>{{ capture.search_profile.name }}</strong></span>
+      {% endif %}
+      {% if capture.source_url %}
+        <a href="{{ capture.source_url }}" target="_blank" rel="noopener noreferrer">Ver anuncio original</a>
+      {% endif %}
+    </div>
+
+    {% if show_verification_evidence %}
+      <div class="property-summary__verification">
+        <strong>Verificación de disponibilidad</strong>
+        {% if capture.availability_verified_at %}
+          <span>
+            {{ capture.availability_verified_at|date:"d/m/Y H:i" }}
+            {% if capture.availability_verified_by %} · {{ capture.availability_verified_by }}{% endif %}
+          </span>
+        {% else %}
+          <span>Pendiente de verificación</span>
+        {% endif %}
+        {% if not hide_verification_note and capture.availability_verification_note %}
+          <p>{{ capture.availability_verification_note }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if show_price %}
+    <div class="property-summary__price">
+      <span>Precio</span>
+      {% if capture.price is not None %}
+        <strong>{{ capture.price|floatformat:0 }} €</strong>
+      {% else %}
+        <strong>Precio no indicado</strong>
+      {% endif %}
+    </div>
+  {% endif %}
+</article>

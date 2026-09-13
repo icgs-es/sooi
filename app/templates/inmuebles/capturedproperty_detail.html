@@ -4,56 +4,19 @@
 {% block section_title %}Detalle de captación{% endblock %}
 
 {% block content %}
-  <div class="capture-detail-hero">
-    <div class="capture-detail-hero__main">
-      <div class="capture-detail-hero__eyebrow">
-        <span class="sooi-badge sooi-badge--method sooi-badge--{{ item.entry_mode }}">
-          {{ item.get_entry_mode_display }}
-        </span>
-
-        <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">
-          {{ item.get_status_display }}
-        </span>
-
-        {% if item.is_interesting %}
-          <span class="sooi-badge sooi-badge--interest-yes">Interesante</span>
-        {% else %}
-          <span class="sooi-badge sooi-badge--interest-no">Sin marcar</span>
-        {% endif %}
-      </div>
-
-      <h1>{{ item.title }}</h1>
-
-      <div class="capture-detail-hero__meta">
-        <span>{{ item.source.name }}</span>
-        <span>·</span>
-        <span>{{ item.get_operation_type_display }}</span>
-        <span>·</span>
-        <span>{{ item.get_property_type_display }}</span>
-        <span>·</span>
-        <span>
-          {% if item.municipality or item.province %}
-            {{ item.municipality }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}
-          {% else %}
-            Sin ubicación
-          {% endif %}
-        </span>
-      </div>
-    </div>
-
-    <div class="capture-detail-hero__side">
-      <span>Precio</span>
-      <strong>{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</strong>
-      <small>Captado el {{ item.captured_at|date:"d/m/Y H:i" }}</small>
-    </div>
+  <div class="property-detail-heading">
+    <span class="sooi-badge sooi-badge--status sooi-badge--{{ item.status }}">Captación: {{ item.get_status_display }}</span>
+    <span class="sooi-badge sooi-badge--method sooi-badge--{{ item.entry_mode }}">Entrada: {{ item.get_entry_mode_display }}</span>
+    {% if item.is_interesting %}<span class="sooi-badge sooi-badge--interest-yes">Interesante</span>{% endif %}
   </div>
+  {% include "inmuebles/_property_summary.html" with capture=item compact=False show_price=True show_verification_evidence=True hide_verification_note=True %}
 
   <div class="page-card capture-detail-actions">
     <a class="btn" href="{{ next_url }}">Volver a captación</a>
     <a class="btn" href="/app/captacion/{{ item.id }}/editar/?next={{ next_url|urlencode }}">Editar</a>
 
     {% if item.source_url %}
-      <a class="btn" href="{{ item.source_url }}" target="_blank" rel="noopener">Abrir URL origen</a>
+      <a class="btn" href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">Abrir URL origen</a>
     {% endif %}
 
     {% if not item.is_interesting %}
@@ -72,12 +35,22 @@
 
     {% if existing_opportunity %}
       <a class="btn btn-primary" href="/app/oportunidades/{{ existing_opportunity.id }}/">Ver oportunidad</a>
+    {% elif item.status == "discarded" %}
+      <span class="conversion-blocked-state">Descartado · Debe restaurarse antes de convertir</span>
+    {% elif item.availability_verification_state == "unknown" %}
+      <span class="conversion-blocked-state">Verifica disponibilidad antes de convertir</span>
+    {% elif item.availability_verification_state == "unavailable" %}
+      <span class="conversion-blocked-state conversion-blocked-state--unavailable">No disponible · No se puede convertir</span>
+    {% elif item.status == "validated" %}
+      <span class="conversion-blocked-state">Validado sin oportunidad · Requiere revisión</span>
     {% else %}
       <form method="post" action="/app/captacion/{{ item.id }}/convertir/">
         {% csrf_token %}
         <button class="btn btn-primary" type="submit">Convertir en oportunidad</button>
       </form>
+    {% endif %}
 
+    {% if not existing_opportunity %}
       <form method="post" action="/app/captacion/{{ item.id }}/eliminar/">
         {% csrf_token %}
         <button class="btn btn-danger" type="submit">Eliminar</button>
@@ -85,24 +58,69 @@
     {% endif %}
   </div>
 
+  <div class="page-card" style="margin-top:18px;">
+    <h2>Verificación de disponibilidad</h2>
+    <form method="post" action="/app/captacion/{{ item.id }}/verificar-disponibilidad/">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="/app/captacion/{{ item.id }}/?next={{ next_url|urlencode }}">
+      <div style="display:grid;grid-template-columns:minmax(180px,260px) minmax(280px,1fr) auto;gap:12px;align-items:end;">
+        <div>
+          <label for="{{ availability_form.availability_verification_state.id_for_label }}">Disponibilidad</label>
+          {{ availability_form.availability_verification_state }}
+        </div>
+        <div>
+          <label for="{{ availability_form.availability_verification_note.id_for_label }}">Nota de verificación</label>
+          {{ availability_form.availability_verification_note }}
+        </div>
+        <button class="btn btn-primary" type="submit">Guardar</button>
+      </div>
+    </form>
+  </div>
+
   <div class="capture-detail-grid">
     <div class="capture-detail-panel">
-      <h2>Datos principales</h2>
+      <h2>Origen SOOI</h2>
 
       <div class="capture-detail-fields">
         <div>
-          <span>Dormitorios</span>
-          <strong>{{ item.bedrooms|default:"—" }}</strong>
+          <span>Encontrado en</span>
+          <strong>{% if item.search_profile %}{{ item.search_profile.name }}{% else %}Captación sin búsqueda asociada{% endif %}</strong>
         </div>
 
         <div>
-          <span>Baños</span>
-          <strong>{{ item.bathrooms|default:"—" }}</strong>
+          <span>Captado</span>
+          <strong>{{ item.captured_at|date:"d/m/Y H:i" }}</strong>
         </div>
 
         <div>
-          <span>Superficie</span>
-          <strong>{% if item.area_m2 %}{{ item.area_m2 }} m²{% else %}—{% endif %}</strong>
+          <span>Última vez visto</span>
+          <strong>{% if item.last_seen_at %}{{ item.last_seen_at|date:"d/m/Y H:i" }}{% else %}Sin comprobación posterior{% endif %}</strong>
+        </div>
+
+        <div>
+          <span>Fuente</span>
+          <strong>{{ item.source.name }}</strong>
+        </div>
+
+        <div>
+          <span>Publicación en origen</span>
+          <strong>{% if item.published_at_source %}{{ item.published_at_source|date:"d/m/Y H:i" }}{% else %}Fecha no indicada{% endif %}</strong>
+        </div>
+
+        <div>
+          <span>Ejecución de búsqueda</span>
+          <strong>{% if item.search_run %}Búsqueda ejecutada el {{ item.search_run.created_at|date:"d/m/Y H:i" }}{% else %}Sin ejecución asociada{% endif %}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="capture-detail-panel">
+      <h2>Decisión humana</h2>
+
+      <div class="capture-detail-trace">
+        <div>
+          <span>Estado de captación</span>
+          <strong>{{ item.get_status_display }}</strong>
         </div>
 
         <div>
@@ -111,53 +129,25 @@
         </div>
 
         <div>
-          <span>Búsqueda</span>
-          <strong>{% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</strong>
-        </div>
-
-        <div>
-          <span>Fuente</span>
-          <strong>{{ item.source.name }}</strong>
-        </div>
-      </div>
-    </div>
-
-    <div class="capture-detail-panel">
-      <h2>Trazabilidad</h2>
-
-      <div class="capture-detail-trace">
-        <div>
-          <span>ID captación</span>
-          <strong>#{{ item.id }}</strong>
-        </div>
-
-        <div>
-          <span>Modo de entrada</span>
-          <strong>{{ item.get_entry_mode_display }}</strong>
-        </div>
-
-        <div>
           <span>Última revisión</span>
-          <strong>{% if item.last_reviewed_at %}{{ item.last_reviewed_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</strong>
+          <strong>{% if item.last_reviewed_at %}{{ item.last_reviewed_at|date:"d/m/Y H:i" }}{% else %}Pendiente{% endif %}</strong>
         </div>
 
         <div>
-          <span>URL origen</span>
-          {% if item.source_url %}
-            <a href="{{ item.source_url }}" target="_blank" rel="noopener">{{ item.source_url }}</a>
-          {% else %}
-            <strong>—</strong>
-          {% endif %}
+          <span>Calidad</span>
+          <strong>{% if item.possible_duplicate %}Posible duplicado: revisar antes de decidir{% else %}Sin alerta de duplicado{% endif %}</strong>
         </div>
       </div>
     </div>
   </div>
 
   <div class="capture-detail-grid capture-detail-grid--text">
-    <div class="capture-detail-panel">
-      <h2>Descripción original</h2>
-      <p class="capture-detail-text">{{ item.description_raw|default:"Sin descripción." }}</p>
-    </div>
+    {% if item.description_raw and item.description_raw|slice:":13" != "SOOI V2.6.1 ·" %}
+      <div class="capture-detail-panel">
+        <h2>Descripción original</h2>
+        <p class="capture-detail-text">{{ item.description_raw }}</p>
+      </div>
+    {% endif %}
 
     <div class="capture-detail-panel">
       <h2>IA y notas</h2>

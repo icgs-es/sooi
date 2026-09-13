@@ -1,0 +1,7 @@
+services:
+  web:
+    environment:
+      SOOI_GEOGRAPHY_RUNTIME_V1: "1"
+  worker:
+    environment:
+      SOOI_GEOGRAPHY_RUNTIME_V1: "1"

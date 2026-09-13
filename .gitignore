@@ -45,3 +45,11 @@ infra/**/*.key
 *.bak-*
 *.backup
 *.orig
+
+# SOOI production local artifacts
+_tmp/
+incoming/
+app/.gunicorn/
+infra/0
+app/.atlas_endpoint_probe.txt
+infra/docker-compose.wp13-runtime-compat.yml

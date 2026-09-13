@@ -1,0 +1,32 @@
+{
+  "alias_count": 501,
+  "content_digest": "sha256:05e79764db6e9a3aee65a4d96622bd72bbaf4f8fcda9c100662e476180ff6e5f",
+  "country": "ES",
+  "entity_counts": {
+    "autonomous_city": 2,
+    "autonomous_community": 17,
+    "country": 1,
+    "island": 0,
+    "municipality": 8132,
+    "province": 50,
+    "territorial_area": 0
+  },
+  "membership_count": 0,
+  "post_baseline_modifications_applied": false,
+  "post_baseline_modifications_discovered": 13,
+  "registry_version": "SOOI_GEOGRAPHY_REGISTRY_ES_V2",
+  "schema_version": 2,
+  "source_authority": "INE",
+  "source_files": [
+    "SHA256SUMS.txt",
+    "cod_ccaa.htm",
+    "cod_ccaa_provincia.htm",
+    "cod_num_muni_provincia_ccaa.htm",
+    "cod_provincia.htm",
+    "codmun_anual.htm",
+    "diccionario26.xlsx"
+  ],
+  "source_reference_date": "2026-01-01",
+  "source_sha256": "07f8e8d64eba73fe9d425196fe82f4e09a9886a287abd650e88ca8d98dd49052",
+  "validation": "PASS"
+}

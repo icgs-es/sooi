@@ -1,0 +1,6 @@
+# Runtime environment files may contain credentials. Keep examples tracked.
+.env
+.env.prod
+.env.production
+.env.release
+!.env.release.example

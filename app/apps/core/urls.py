@@ -3,12 +3,14 @@ from django.urls import include, path
 
 from .views import (
     dashboard,
+    daily_digest_preview,
     demo_request,
     home,
     internal_user_create,
     internal_user_edit,
     internal_user_list,
     logout_view,
+    notification_preferences,
     privacy_policy,
     registro_view,
     system_settings_edit,
@@ -27,6 +29,8 @@ urlpatterns = [
     path("app/", dashboard, name="dashboard"),
     path("app/trial-expirado/", trial_expirado, name="trial_expirado"),
     path("app/configuracion/", internal_admin_required(system_settings_edit), name="system_settings"),
+    path("app/notificaciones/", notification_preferences, name="notification_preferences"),
+    path("app/notificaciones/vista-previa/", daily_digest_preview, name="daily_digest_preview"),
     path("app/ia/", include("apps.ia.urls")),
     path("app/busquedas/", include("apps.busquedas.urls")),
     path("app/captacion/", include("apps.inmuebles.urls")),

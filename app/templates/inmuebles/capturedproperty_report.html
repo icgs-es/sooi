@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Informe de captaciones seleccionadas | SOOI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      margin:0;
+      background:#e5e7eb;
+      color:#0f172a;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      font-size:13px;
+      line-height:1.45;
+    }
+
+    .report-toolbar {
+      position:sticky;
+      top:0;
+      z-index:5;
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      padding:12px 20px;
+      background:#0f172a;
+      box-shadow:0 8px 20px rgba(15,23,42,.18);
+    }
+
+    .report-toolbar button {
+      border:0;
+      border-radius:9px;
+      padding:8px 12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    .report {
+      max-width:980px;
+      margin:24px auto;
+      padding:28px;
+      background:#fff;
+      border-radius:18px;
+      box-shadow:0 24px 50px rgba(15,23,42,.12);
+    }
+
+    .report-header {
+      border-bottom:2px solid #dbe3ee;
+      padding-bottom:14px;
+      margin-bottom:20px;
+    }
+
+    h1 {
+      margin:0;
+      font-size:24px;
+      letter-spacing:-.02em;
+    }
+
+    .report-meta {
+      margin-top:6px;
+      color:#64748b;
+      font-size:12px;
+    }
+
+    .property-card {
+      break-inside:avoid;
+      page-break-inside:avoid;
+      border:1px solid #dbe3ee;
+      border-radius:14px;
+      padding:16px;
+      margin-bottom:16px;
+    }
+
+    .property-card-top {
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      border-bottom:1px solid #eef2f7;
+      padding-bottom:10px;
+      margin-bottom:12px;
+    }
+
+    .property-title {
+      margin:0;
+      font-size:17px;
+      line-height:1.25;
+    }
+
+    .property-price {
+      white-space:nowrap;
+      font-size:18px;
+      font-weight:900;
+      text-align:right;
+    }
+
+    .grid {
+      display:grid;
+      grid-template-columns:150px minmax(0,1fr);
+      gap:6px 14px;
+      margin-bottom:10px;
+    }
+
+    .label {
+      color:#64748b;
+      font-weight:800;
+    }
+
+    .value {
+      min-width:0;
+      word-break:break-word;
+    }
+
+    .url {
+      color:#1d4ed8;
+      text-decoration:none;
+      word-break:break-all;
+    }
+
+    .badges {
+      display:flex;
+      flex-wrap:wrap;
+      gap:5px;
+    }
+
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      padding:3px 7px;
+      border:1px solid #cbd5e1;
+      background:#f8fafc;
+      color:#334155;
+      font-size:11px;
+      font-weight:800;
+    }
+
+    .badge-ok {
+      background:#ecfdf5;
+      border-color:#bbf7d0;
+      color:#047857;
+    }
+
+    .badge-warning {
+      background:#fff7ed;
+      border-color:#fdba74;
+      color:#9a3412;
+    }
+
+    .badge-ia {
+      background:#f5f3ff;
+      border-color:#c4b5fd;
+      color:#6d28d9;
+    }
+
+    .notes {
+      margin-top:12px;
+      padding:10px 12px;
+      background:#f8fafc;
+      border-radius:12px;
+      border:1px solid #e2e8f0;
+    }
+
+    .notes h3 {
+      margin:0 0 6px;
+      font-size:13px;
+    }
+
+    .notes p {
+      margin:0;
+    }
+
+    .notes ul {
+      margin:6px 0 0 18px;
+      padding:0;
+    }
+
+    @media print {
+      @page {
+        size:A4;
+        margin:12mm;
+      }
+
+      body {
+        background:#fff;
+        font-size:11px;
+      }
+
+      .no-print {
+        display:none !important;
+      }
+
+      .report {
+        max-width:none;
+        margin:0;
+        padding:0;
+        border-radius:0;
+        box-shadow:none;
+      }
+
+      .property-card {
+        border-radius:8px;
+        margin-bottom:10px;
+        padding:12px;
+      }
+
+      .property-title,
+      .property-price {
+        font-size:14px;
+      }
+
+      a {
+        color:#0f172a;
+        text-decoration:none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="report-toolbar no-print">
+    <button type="button" onclick="window.print()">Imprimir / Guardar PDF</button>
+    <button type="button" onclick="window.close()">Cerrar</button>
+  </div>
+
+  <main class="report">
+    <header class="report-header">
+      <h1>Informe de captaciones seleccionadas</h1>
+      <div class="report-meta">
+        Generado: {{ generated_at|date:"d/m/Y H:i" }} · Captaciones: {{ total_items }}
+      </div>
+    </header>
+
+    {% for item in items %}
+      <section class="property-card">
+        <div class="property-card-top">
+          <div>
+            <h2 class="property-title">{{ item.title }}</h2>
+            <div class="report-meta">
+              {% if item.search_profile %}{{ item.search_profile.name }}{% else %}Sin búsqueda asociada{% endif %}
+              · {{ item.get_operation_type_display }}
+              · {{ item.get_property_type_display }}
+            </div>
+          </div>
+
+          <div class="property-price">
+            {% if item.price %}{{ item.price|floatformat:0 }} €{% else %}Precio no informado{% endif %}
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="label">Fecha captación</div>
+          <div class="value">{{ item.captured_at|date:"d/m/Y H:i" }}</div>
+
+          <div class="label">Búsqueda</div>
+          <div class="value">{% if item.search_profile %}{{ item.search_profile.name }}{% else %}—{% endif %}</div>
+
+          <div class="label">Ubicación</div>
+          <div class="value">
+            {% if item.municipality or item.province or item.zone_text %}
+              {% if item.zone_text %}{{ item.zone_text }} · {% endif %}
+              {{ item.municipality }}{% if item.municipality and item.province %}, {% endif %}{{ item.province }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+
+          <div class="label">Fuente</div>
+          <div class="value">{% if item.source %}{{ item.source.name }}{% else %}—{% endif %}</div>
+
+          <div class="label">URL</div>
+          <div class="value">
+            {% if item.source_url %}
+              <a class="url" href="{{ item.source_url }}" target="_blank" rel="noopener">{{ item.source_url }}</a>
+            {% else %}
+              —
+            {% endif %}
+          </div>
+
+          <div class="label">Características</div>
+          <div class="value">
+            {{ item.get_operation_type_display }} · {{ item.get_property_type_display }}
+            {% if item.bedrooms %} · {{ item.bedrooms }} hab.{% endif %}
+            {% if item.bathrooms %} · {{ item.bathrooms }} baños{% endif %}
+            {% if item.area_m2 %} · {{ item.area_m2|floatformat:0 }} m²{% endif %}
+          </div>
+
+          <div class="label">Control</div>
+          <div class="value">
+            <div class="badges">
+              <span class="badge">{{ item.get_status_display }}</span>
+              <span class="badge">{{ item.get_review_status_display }}</span>
+
+              {% if item.is_interesting %}
+                <span class="badge badge-ok">Interesante</span>
+              {% endif %}
+
+              {% if item.possible_duplicate %}
+                <span class="badge badge-warning">Posible duplicado</span>
+              {% endif %}
+
+              {% if item.ai_score %}
+                <span class="badge badge-ia">Score IA {{ item.ai_score }}</span>
+              {% endif %}
+
+              {% if item.entry_mode %}
+                <span class="badge">{{ item.get_entry_mode_display }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if item.ai_summary or item.ai_signals or item.manual_notes %}
+          <div class="notes">
+            <h3>Observaciones</h3>
+
+            {% if item.ai_summary %}
+              <p><strong>Resumen IA:</strong> {{ item.ai_summary|linebreaksbr }}</p>
+            {% endif %}
+
+            {% if item.ai_signals %}
+              <p><strong>Señales IA:</strong></p>
+              <ul>
+                {% for signal in item.ai_signals %}
+                  <li>{{ signal }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+
+            {% if item.manual_notes %}
+              <p><strong>Notas manuales:</strong> {{ item.manual_notes|linebreaksbr }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </main>
+</body>
+</html>

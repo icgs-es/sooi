@@ -1,7 +1,8 @@
-from datetime import timedelta
 from math import ceil
 
 from django.utils import timezone
+
+from .plans import resolve_entitlement
 
 DEMO_GROUP_NAME = "sooi_demo_14d"
 DEMO_DAYS = 14
@@ -17,9 +18,8 @@ def get_demo_status(user):
             "ends_at": None,
         }
 
-    is_demo = user.groups.filter(name=DEMO_GROUP_NAME).exists()
-
-    if not is_demo:
+    entitlement = resolve_entitlement(user)
+    if not entitlement.trial_active and not entitlement.trial_expired:
         return {
             "is_demo": False,
             "active": False,
@@ -29,14 +29,13 @@ def get_demo_status(user):
         }
 
     now = timezone.now()
-    starts_at = user.date_joined
-    ends_at = starts_at + timedelta(days=DEMO_DAYS)
-    seconds_remaining = max((ends_at - now).total_seconds(), 0)
+    ends_at = user.profile.trial_end
+    seconds_remaining = max((ends_at - now).total_seconds(), 0) if ends_at else 0
     days_remaining = ceil(seconds_remaining / 86400) if seconds_remaining > 0 else 0
 
     return {
         "is_demo": True,
-        "active": now < ends_at,
+        "active": entitlement.trial_active,
         "days_total": DEMO_DAYS,
         "days_remaining": days_remaining,
         "ends_at": ends_at,

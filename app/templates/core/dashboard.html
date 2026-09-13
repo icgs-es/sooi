@@ -1,237 +1,222 @@
 {% extends "core/base_private.html" %}
 
-{% block title %}Panel | SOOI{% endblock %}
-{% block section_title %}Panel{% endblock %}
+{% block title %}Hoy | SOOI{% endblock %}
+{% block section_title %}Hoy{% endblock %}
 
 {% block content %}
   {% if trial_info %}
     {% if trial_info.active %}
-    <div style="background:#8DC63F;color:#1B2A3B;padding:10px 20px;
-                border-radius:8px;margin-bottom:20px;font-weight:600;">
-      ⏱ Tu prueba Professional termina en {{ trial_info.days_left }} días ·
-      <a href="mailto:hola@sooi.io" style="color:#1B2A3B;">Contáctanos para continuar</a>
-    </div>
+      <div class="daily-trial daily-trial--active">
+        Tu prueba Professional termina en {{ trial_info.days_left }} días ·
+        <a href="mailto:hola@sooi.io">Contáctanos para continuar</a>
+      </div>
     {% elif trial_info.expired %}
-    <div style="background:#ff4444;color:white;padding:10px 20px;
-                border-radius:8px;margin-bottom:20px;font-weight:600;">
-      ⚠️ Tu prueba ha finalizado.
-      <a href="{% url 'trial_expirado' %}" style="color:white;">Ver opciones para continuar</a>
-    </div>
+      <div class="daily-trial daily-trial--expired">
+        Tu prueba ha finalizado. <a href="{% url 'trial_expirado' %}">Ver opciones para continuar</a>
+      </div>
     {% endif %}
   {% endif %}
-  <div class="page-card">
-    <h1>Panel operativo</h1>
-    <p>Resumen de valor: captación, ruido detectado, oportunidades y seguimiento activo.</p>
 
-    <div class="sooi-dashboard-roadmap-card" style="
-      margin-top:18px;
-      padding:16px;
-      border:1px solid #dbe3ee;
-      border-left:4px solid #84cc16;
-      border-radius:16px;
-      background:linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    ">
-      <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start;">
-        <div style="max-width:640px;">
-          <div style="
-            display:inline-flex;
-            align-items:center;
-            padding:4px 9px;
-            border-radius:999px;
-            background:#ecfccb;
-            color:#365314;
-            font-weight:800;
-            font-size:12px;
-            margin-bottom:8px;
-          ">
-            SOOI V2
-          </div>
-
-          <h2 style="font-size:20px; margin:0 0 6px;">Producto operativo comercializable</h2>
-
-          <p style="margin:0; color:#475569;">
-            SOOI V2 permite trabajar con búsquedas como expedientes, captación por email,
-            bandeja de revisión, oportunidades, tareas, agenda, alertas e IA controlada.
-          </p>
-        </div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <a class="btn" href="/app/busquedas/">Ver búsquedas</a>
-          <a class="btn" href="/app/inbox/">Inbox Email</a>
-        </div>
+  <header class="daily-hero">
+    <div>
+      <p class="daily-eyebrow">Hoy en SOOI</p>
+      <h1>¿Qué requiere tu atención?</h1>
+      <p>Trabajo comercial pendiente, ordenado por urgencia y listo para actuar.</p>
+    </div>
+    {% if daily_workflow.attention_total %}
+      <div class="daily-attention-total" aria-label="Elementos que requieren atención">
+        <strong>{{ daily_workflow.attention_total }}</strong>
+        <span>requieren atención</span>
       </div>
-
-      <div style="
-        display:grid;
-        grid-template-columns:repeat(2, minmax(0, 1fr));
-        gap:12px;
-        margin-top:14px;
-      ">
-        <div style="padding:14px; border:1px solid #dbe3ee; border-radius:14px; background:#ffffff;">
-          <strong>SOOI V2.1 · Próximas mejoras operativas</strong>
-          <ul style="margin:10px 0 0 18px; color:#475569; line-height:1.55;">
-            <li>Revisión automática de enlaces de oportunidades.</li>
-            <li>Actividades automáticas de disponibilidad.</li>
-            <li>Alertas de oportunidades posiblemente retiradas.</li>
-            <li>Mayor trazabilidad de automatizaciones.</li>
-          </ul>
-        </div>
-
-        <div style="padding:14px; border:1px solid #dbe3ee; border-radius:14px; background:#ffffff;">
-          <strong>SOOI V3 · Evolución prevista</strong>
-          <ul style="margin:10px 0 0 18px; color:#475569; line-height:1.55;">
-            <li>Captación Agente IA v0.</li>
-            <li>Estudio de integraciones con APIs oficiales de portales.</li>
-            <li>Automatización avanzada de búsquedas.</li>
-            <li>Reporting y analítica para equipos.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="quick-grid" style="margin-top: 18px;">
-    <div class="quick-card">
-      <h3>Búsquedas activas</h3>
-      <p><strong>{{ stats.search_profiles_active }}</strong> expedientes operativos</p>
-      <p><strong>{{ stats.search_profiles }}</strong> búsquedas totales</p>
-    </div>
-
-    <div class="quick-card">
-      <h3>Captación</h3>
-      <p><strong>{{ stats.captured_properties }}</strong> inmuebles captados</p>
-      <p><strong>{{ stats.captured_review_queue }}</strong> en cola de revisión</p>
-    </div>
-
-    <div class="quick-card">
-      <h3>Señales útiles</h3>
-      <p><strong>{{ stats.captured_interesting }}</strong> marcados como interesantes</p>
-      <p><strong>{{ stats.captured_duplicates }}</strong> posibles duplicados detectados</p>
-    </div>
-
-    <div class="quick-card">
-      <h3>Oportunidades</h3>
-      <p><strong>{{ stats.opportunities_active }}</strong> activas</p>
-      <p><strong>{{ stats.opportunities_high }}</strong> prioridad alta</p>
-    </div>
-
-    <div class="quick-card">
-      <h3>Conversión</h3>
-      <p><strong>{{ stats.capture_to_opportunity_ratio }}%</strong> captación → oportunidad</p>
-      <p><strong>{{ stats.opportunities }}</strong> oportunidades totales</p>
-    </div>
-
-    <div class="quick-card">
-      <h3>Seguimiento</h3>
-      <p><strong>{{ stats.tasks_open }}</strong> tareas abiertas</p>
-      <p><strong>{{ stats.alerts_new }}</strong> alertas nuevas</p>
-    </div>
-  </div>
-
-  <div class="actions" style="margin-top: 18px;">
-    <a class="btn btn-primary" href="/app/busquedas/nuevo/">Nueva búsqueda</a>
-    <a class="btn" href="/app/captacion/">Abrir captación</a>
-    <a class="btn" href="/app/oportunidades/">Ver oportunidades</a>
-    {# SOOI_STAFF_ONLY_LINK_START #}{% if user.is_staff or user.is_superuser %}<a class="btn" href="/app/configuracion/">Configuración</a>{% endif %}{# SOOI_STAFF_ONLY_LINK_END #}
-  </div>
-
-  <div class="page-card" style="margin-top: 18px;">
-    <h1 style="font-size:22px;">Últimos inmuebles captados</h1>
-    {% if recent_captured %}
-      <div style="overflow:auto; margin-top: 14px;">
-        <table style="width:100%; border-collapse: collapse;">
-          <thead>
-            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
-              <th style="padding:12px;">Fecha</th>
-              <th style="padding:12px;">Título</th>
-              <th style="padding:12px;">Fuente</th>
-              <th style="padding:12px;">Estado</th>
-              <th style="padding:12px;">Precio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in recent_captured %}
-              <tr style="border-bottom:1px solid #eef2f7;">
-                <td style="padding:12px;">{{ item.captured_at|date:"d/m/Y H:i" }}</td>
-                <td style="padding:12px; font-weight:600;">{{ item.title }}</td>
-                <td style="padding:12px;">{{ item.source.name }}</td>
-                <td style="padding:12px;">{{ item.get_status_display }}</td>
-                <td style="padding:12px;">{% if item.price %}{{ item.price }} €{% else %}—{% endif %}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p style="margin-top:14px; color:#64748b;">Todavía no hay captaciones.</p>
     {% endif %}
-  </div>
+  </header>
 
-  <div class="page-card" style="margin-top: 18px;">
-    <h1 style="font-size:22px;">Últimas oportunidades</h1>
-    {% if recent_opportunities %}
-      <div style="overflow:auto; margin-top: 14px;">
-        <table style="width:100%; border-collapse: collapse;">
-          <thead>
-            <tr style="text-align:left; border-bottom:1px solid #dbe3ee;">
-              <th style="padding:12px;">Título</th>
-              <th style="padding:12px;">Estado</th>
-              <th style="padding:12px;">Prioridad</th>
-              <th style="padding:12px;">Siguiente acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in recent_opportunities %}
-              <tr style="border-bottom:1px solid #eef2f7;">
-                <td style="padding:12px; font-weight:600;">{{ item.title }}</td>
-                <td style="padding:12px;">{{ item.get_status_display }}</td>
-                <td style="padding:12px;">{{ item.get_priority_display }}</td>
-                <td style="padding:12px;">{% if item.next_action_type %}{{ item.get_next_action_type_display }}{% else %}—{% endif %}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <section class="daily-counter-grid" aria-label="Resumen de trabajo pendiente" data-daily-counters>
+    <a class="daily-counter daily-counter--priority" href="/app/captacion/?daily=ready" data-daily-counter>
+      <strong>{{ daily_workflow.counters.captures_ready }}</strong>
+      <span>Disponibles pendientes</span>
+    </a>
+    <a class="daily-counter daily-counter--secondary" href="/app/captacion/?daily=availability" data-daily-counter>
+      <strong>{{ daily_workflow.counters.captures_availability }}</strong>
+      <span>Sin verificar</span>
+    </a>
+    <a class="daily-counter daily-counter--priority" href="/app/oportunidades/?daily=overdue" data-daily-counter>
+      <strong>{{ daily_workflow.counters.opportunities_overdue }}</strong>
+      <span>Seguimientos vencidos</span>
+    </a>
+    <a class="daily-counter daily-counter--priority" href="/app/oportunidades/?daily=today" data-daily-counter>
+      <strong>{{ daily_workflow.counters.opportunities_today }}</strong>
+      <span>Seguimientos hoy</span>
+    </a>
+    <a class="daily-counter daily-counter--secondary" href="/app/oportunidades/?daily=no_next" data-daily-counter>
+      <strong>{{ daily_workflow.counters.opportunities_no_next }}</strong>
+      <span>Sin próxima revisión</span>
+    </a>
+    <a class="daily-counter daily-counter--secondary" href="/app/tareas/?daily=overdue" data-daily-counter>
+      <strong>{{ daily_workflow.counters.tasks_overdue }}</strong>
+      <span>Tareas vencidas</span>
+    </a>
+    <a class="daily-counter daily-counter--secondary" href="/app/tareas/?daily=today" data-daily-counter>
+      <strong>{{ daily_workflow.counters.tasks_today }}</strong>
+      <span>Tareas hoy</span>
+    </a>
+  </section>
+
+  {% if daily_workflow.is_all_clear %}
+    <section class="daily-all-clear" aria-live="polite">
+      <strong>Todo al día</strong>
+      <span>No hay acciones prioritarias pendientes para hoy.</span>
+    </section>
+  {% else %}
+    <section class="daily-section" aria-labelledby="daily-attention-title">
+      <div class="daily-section__heading">
+        <div>
+          <p class="daily-eyebrow">Prioridad operativa</p>
+          <h2 id="daily-attention-title">Necesita atención</h2>
+        </div>
       </div>
-    {% else %}
-      <p style="margin-top:14px; color:#64748b;">Todavía no hay oportunidades.</p>
-    {% endif %}
-  </div>
-
-  <div class="quick-grid" style="margin-top: 18px;">
-    <div class="page-card">
-      <h1 style="font-size:22px;">Tareas recientes</h1>
-      {% if recent_tasks %}
-        <div style="margin-top: 14px;">
-          {% for item in recent_tasks %}
-            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
-              <div style="font-weight:600;">{{ item.title }}</div>
-              <div style="color:#64748b; font-size:14px;">
-                {{ item.get_status_display }} · {{ item.get_priority_display }}
-              </div>
+      <div class="daily-list">
+        {% for item in daily_workflow.attention %}
+          <article class="daily-item daily-item--{{ item.kind }}" data-attention-item>
+            <div class="daily-item__main">
+              <span class="daily-reason daily-reason--{{ item.category }}">{{ item.reason_label }}</span>
+              {% if item.kind == "capture" %}
+                <h3>{{ item.object.title }}</h3>
+                <p>
+                  {% if item.object.municipality %}{{ item.object.municipality }}{% if item.object.province %} · {{ item.object.province }}{% endif %}{% elif item.object.province %}{{ item.object.province }}{% else %}Ubicación no indicada{% endif %}
+                  {% if item.object.price is not None %} · {{ item.object.price|floatformat:0 }} €{% endif %}
+                </p>
+              {% elif item.kind == "opportunity" %}
+                <h3>{{ item.object.title }}</h3>
+                <p>{{ item.object.get_next_action_type_display }}{% if item.object.next_action_notes %} · {{ item.object.next_action_notes }}{% endif %}</p>
+              {% else %}
+                <h3>{{ item.object.title }}</h3>
+                <p>{% if item.object.property_opportunity %}{{ item.object.property_opportunity.title }}{% elif item.object.captured_property %}{{ item.object.captured_property.title }}{% else %}Tarea comercial{% endif %}</p>
+              {% endif %}
             </div>
+            <div class="daily-item__meta">
+              {% if item.due_at %}<time datetime="{{ item.due_at|date:'c' }}">{{ item.due_at|date:"d/m/Y H:i" }}</time>{% endif %}
+              {% if item.priority %}<span>Prioridad {{ item.object.get_priority_display|lower }}</span>{% endif %}
+              {% if item.kind == "capture" %}
+                <a class="btn" href="/app/captacion/{{ item.object.pk }}/">Abrir inmueble</a>
+              {% elif item.kind == "opportunity" %}
+                <a class="btn" href="/app/oportunidades/{{ item.object.pk }}/">Abrir oportunidad</a>
+              {% else %}
+                <a class="btn" href="/app/tareas/{{ item.object.pk }}/">Abrir tarea</a>
+              {% endif %}
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="daily-two-column">
+    <section class="daily-section" aria-labelledby="daily-captures-title">
+      <div class="daily-section__heading">
+        <div>
+          <p class="daily-eyebrow">Decisión humana</p>
+          <h2 id="daily-captures-title">Captaciones pendientes</h2>
+        </div>
+        <a href="/app/captacion/">Ver captación</a>
+      </div>
+      {% if daily_workflow.pending_captures %}
+        <div class="daily-compact-list">
+          {% for item in daily_workflow.pending_captures %}
+            <a href="/app/captacion/{{ item.object.pk }}/" class="daily-compact-item" data-capture-item>
+              <span class="daily-reason daily-reason--{{ item.category }}">{{ item.reason_label }}</span>
+              <strong>{% if item.object.municipality %}{{ item.object.municipality }}{% if item.object.province %} · {{ item.object.province }}{% endif %}{% elif item.object.province %}{{ item.object.province }}{% else %}{{ item.object.title }}{% endif %}</strong>
+              <span class="daily-compact-item__description">{{ item.object.source.name }} · {{ item.object.title }}</span>
+              <small>{{ item.object.get_availability_verification_state_display }} · Captado {{ item.object.captured_at|date:"d/m/Y" }}</small>
+            </a>
           {% endfor %}
         </div>
       {% else %}
-        <p style="margin-top:14px; color:#64748b;">Sin tareas.</p>
+        <p class="daily-empty">No hay captaciones que requieran decisión.</p>
       {% endif %}
-    </div>
+    </section>
 
-    <div class="page-card">
-      <h1 style="font-size:22px;">Alertas recientes</h1>
-      {% if recent_alerts %}
-        <div style="margin-top: 14px;">
-          {% for item in recent_alerts %}
-            <div style="padding:10px 0; border-bottom:1px solid #eef2f7;">
-              <div style="font-weight:600;">{{ item.title }}</div>
-              <div style="color:#64748b; font-size:14px;">
-                {{ item.get_alert_type_display }} · {{ item.get_severity_display }}
-              </div>
-            </div>
+    <section class="daily-section" aria-labelledby="daily-actions-title">
+      <div class="daily-section__heading">
+        <div>
+          <p class="daily-eyebrow">Seguimiento</p>
+          <h2 id="daily-actions-title">Próximas acciones</h2>
+        </div>
+        <a href="/app/agenda/">Ver agenda</a>
+      </div>
+      {% if daily_workflow.next_actions %}
+        <div class="daily-compact-list">
+          {% for item in daily_workflow.next_actions %}
+            {% if item.kind == "opportunity" %}
+              <a href="/app/oportunidades/{{ item.object.pk }}/" class="daily-compact-item" data-upcoming-action-item>
+            {% else %}
+              <a href="/app/tareas/{{ item.object.pk }}/" class="daily-compact-item" data-upcoming-action-item>
+            {% endif %}
+                <span class="daily-reason daily-reason--{{ item.category }}">{{ item.reason_label }}</span>
+                <strong>{{ item.object.title }}</strong>
+                {% if item.kind == "opportunity" %}<span class="daily-compact-item__description">{{ item.object.get_next_action_type_display }}{% if item.object.next_action_notes %} · {{ item.object.next_action_notes }}{% endif %}</span>{% endif %}
+                <small>{% if item.due_at %}{{ item.due_at|date:"d/m/Y H:i" }} · {% endif %}Prioridad {{ item.object.get_priority_display|lower }}</small>
+              </a>
           {% endfor %}
         </div>
       {% else %}
-        <p style="margin-top:14px; color:#64748b;">Sin alertas.</p>
+        <p class="daily-empty">No hay seguimientos ni tareas prioritarias.</p>
       {% endif %}
-    </div>
+    </section>
   </div>
+
+  <section class="daily-section daily-section--secondary" aria-labelledby="daily-upcoming-title">
+    <div class="daily-section__heading">
+      <div>
+        <p class="daily-eyebrow">Planificación</p>
+        <h2 id="daily-upcoming-title">Próximos 7 días</h2>
+      </div>
+      <a href="/app/agenda/">Ver todos</a>
+    </div>
+    {% if daily_workflow.upcoming %}
+      <div class="daily-upcoming-list">
+        {% for item in daily_workflow.upcoming %}
+          {% if item.kind == "opportunity" %}
+            <a href="/app/oportunidades/{{ item.object.pk }}/" class="daily-upcoming-item">
+          {% else %}
+            <a href="/app/tareas/{{ item.object.pk }}/" class="daily-upcoming-item">
+          {% endif %}
+              <span>{{ item.reason_label }}</span>
+              <strong>{{ item.object.title }}</strong>
+              <time>{{ item.due_at|date:"D d/m · H:i" }}</time>
+            </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="daily-empty">No hay acciones programadas para los próximos 7 días.</p>
+    {% endif %}
+  </section>
+
+  <section class="daily-section daily-section--secondary" aria-labelledby="daily-activity-title">
+    <div class="daily-section__heading">
+      <div>
+        <p class="daily-eyebrow">Resumen secundario</p>
+        <h2 id="daily-activity-title">Actividad de hoy</h2>
+      </div>
+    </div>
+    <div class="daily-activity-grid">
+      <div data-activity-metric><strong>{{ daily_workflow.secondary.captures_today }}</strong><span>Captaciones de hoy</span></div>
+      <div data-activity-metric><strong>{{ daily_workflow.secondary.verifications_today }}</strong><span>Verificaciones de hoy</span></div>
+      <div data-activity-metric><strong>{{ daily_workflow.secondary.activities_today }}</strong><span>Actividades registradas</span></div>
+      <div data-activity-metric><strong>{{ daily_workflow.secondary.tasks_done_today }}</strong><span>Tareas que figuran hechas hoy</span></div>
+    </div>
+  </section>
+
+  {% if wp08 %}
+    <section class="daily-section daily-section--secondary wp08-guide" aria-labelledby="wp08-guide-title">
+      <div class="wp08-guide__header">
+        <div>
+          <p class="daily-eyebrow">Tu recorrido · Plan {{ wp08.plan_name }}</p>
+          <h2 id="wp08-guide-title">Siguiente paso de configuración</h2>
+          {% if wp08.next_milestone %}<p>Continúa con: {{ wp08.next_milestone.label }}.</p>{% else %}<p>Recorrido inicial completado.</p>{% endif %}
+        </div>
+        <a class="btn" href="{{ wp08.primary_cta.url }}">{{ wp08.primary_cta.label }}</a>
+      </div>
+    </section>
+  {% endif %}
 {% endblock %}

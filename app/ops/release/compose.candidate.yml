@@ -1,0 +1,19 @@
+x-candidate-image: &candidate-image ${IMAGE_TAG:?IMAGE_TAG is required}
+x-candidate-env: &candidate-env
+  env_file:
+    - ${ENV_FILE:-../../.env.release}
+  restart: "no"
+
+services:
+  web:
+    <<: *candidate-env
+    image: *candidate-image
+    command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+  worker:
+    <<: *candidate-env
+    image: *candidate-image
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO"]
+  beat:
+    <<: *candidate-env
+    image: *candidate-image
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO"]

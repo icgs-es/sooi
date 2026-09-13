@@ -1,0 +1,24 @@
+{{ digest.subject }}
+
+{% if digest.is_all_clear %}Todo al día
+No tienes acciones comerciales pendientes en este momento.
+{% else %}{{ digest.total_attention }} acciones requieren tu atención
+{% for counter in digest.counter_items %}{{ counter.value }} · {{ counter.label }}
+{% endfor %}
+PRIORIDAD
+
+{% for item in digest.items %}{{ forloop.counter }}. {{ item.reason }}
+{{ item.title }}
+{% if item.location %}{{ item.location }}
+{% endif %}{% if item.description %}Próxima acción: {{ item.description }}
+{% endif %}{% if item.due_at %}Fecha: {{ item.due_at|date:"d/m/Y H:i" }}
+{% endif %}{% if item.priority %}Prioridad: {{ item.priority|lower }}
+{% endif %}Abrir: {{ item.url }}
+
+{% endfor %}{% if digest.overflow_count %}+ {{ digest.overflow_count }} acciones adicionales
+
+{% endif %}{% endif %}Abrir Hoy en SOOI:
+{{ digest.today_url }}
+
+Estado generado: {{ digest.generated_at|date:"d/m/Y H:i" }}
+Este resumen utiliza la misma información que aparece en Hoy.

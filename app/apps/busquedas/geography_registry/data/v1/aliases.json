@@ -1,0 +1,18 @@
+[
+  {
+    "alias_id": "es:malaga:district:puerto-de-la-torre:alias:puerto-la-torre",
+    "raw_alias": "Puerto la Torre",
+    "target_canonical_key": "es:malaga:district:puerto-de-la-torre",
+    "province_scope": "es:malaga:province",
+    "type_scope": "district",
+    "provenance": [
+      {
+        "provenance_id": "sooi-sr012b-puerto-la-torre-alias-contract",
+        "kind": "sooi_architecture_contract",
+        "reference": "SR0_12B_GEOGRAPHY_ARCHITECTURE.md#9-alias-y-provenance",
+        "note": "SR0.12B defines Puerto la Torre to Puerto de la Torre as the mandatory explicit alias contract."
+      }
+    ],
+    "note": "Explicit SOOI V1 compatibility alias; never inferred by token similarity."
+  }
+]

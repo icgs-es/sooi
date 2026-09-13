@@ -1,3 +1,6 @@
+import os
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -83,6 +86,23 @@ class SearchProfileOperationalRulesTests(TestCase):
             SearchProfile.objects.filter(owner=self.user, name="Séptima búsqueda").exists()
         )
 
+    def test_searchprofile_list_with_geography_runtime_and_no_profiles(self):
+        self.client.login(username="tester", password="testpass123")
+
+        with mock.patch.dict(os.environ, {"SOOI_GEOGRAPHY_RUNTIME_V1": "1"}):
+            response = self.client.get(reverse("searchprofile_list"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_searchprofile_list_with_geography_runtime_and_profile(self):
+        self.client.login(username="tester", password="testpass123")
+        self.make_search()
+
+        with mock.patch.dict(os.environ, {"SOOI_GEOGRAPHY_RUNTIME_V1": "1"}):
+            response = self.client.get(reverse("searchprofile_list"))
+
+        self.assertEqual(response.status_code, 200)
+
     def test_manual_capture_requires_search_profile(self):
         form = CapturedPropertyManualForm(
             user=self.user,
@@ -157,6 +177,11 @@ class SearchProfileOperationalRulesTests(TestCase):
             zone_text="Centro",
             status=CapturedProperty.Status.CAPTURED,
             review_status=CapturedProperty.ReviewStatus.PENDING,
+            availability_verification_state=(
+                CapturedProperty.AvailabilityVerificationState.CONFIRMED
+            ),
+            availability_verified_at=timezone.now(),
+            availability_verified_by=self.user,
             captured_at=timezone.now(),
         )
 

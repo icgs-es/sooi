@@ -1,4 +1,4 @@
-from .models import DemoRequest
+from .models import DemoRequest, NotificationPreference
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -33,6 +33,35 @@ class SystemSettingsForm(forms.ModelForm):
                 }
             ),
         }
+
+
+class NotificationPreferenceForm(forms.ModelForm):
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_daily_digest_enabled(self):
+        enabled = self.cleaned_data["daily_digest_enabled"]
+        if enabled and not (self.user.email or "").strip():
+            raise forms.ValidationError(
+                "Necesitas un correo electrónico en tu cuenta para activar el resumen diario."
+            )
+        return enabled
+
+    class Meta:
+        model = NotificationPreference
+        fields = ["daily_digest_enabled", "daily_digest_time"]
+        labels = {
+            "daily_digest_enabled": "Resumen diario",
+            "daily_digest_time": "Hora del resumen",
+        }
+        help_texts = {
+            "daily_digest_enabled": (
+                "SOOI podrá enviarte por correo un resumen de las acciones que requieren tu atención."
+            ),
+            "daily_digest_time": "Hora de Madrid (Europe/Madrid).",
+        }
+        widgets = {"daily_digest_time": forms.TimeInput(format="%H:%M", attrs={"type": "time"})}
         
 User = get_user_model()
 
