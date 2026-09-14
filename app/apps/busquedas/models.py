@@ -13,6 +13,70 @@ class GeographicArea(models.Model):
     municipalities = models.JSONField("municipios", default=list)
     is_active = models.BooleanField("activa", default=True)
 
+    # G2_WRITE_THROUGH_V1
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get(
+            "update_fields"
+        )
+
+        normalized = (
+            None
+            if update_fields is None
+            else (
+                {update_fields}
+                if isinstance(
+                    update_fields,
+                    str,
+                )
+                else set(
+                    update_fields
+                )
+            )
+        )
+
+        should_compare = (
+            not self._state.adding
+            and (
+                normalized is None
+                or "municipalities"
+                in normalized
+            )
+        )
+
+        previous = None
+
+        if should_compare:
+            previous = (
+                type(self)
+                .objects
+                .filter(
+                    pk=self.pk
+                )
+                .values_list(
+                    "municipalities",
+                    flat=True,
+                )
+                .first()
+            )
+
+        super().save(
+            *args,
+            **kwargs,
+        )
+
+        if (
+            should_compare
+            and previous
+            != self.municipalities
+        ):
+            from .geography_bridge import (
+                refresh_search_profiles_for_area,
+            )
+
+            refresh_search_profiles_for_area(
+                self.pk
+            )
+
     class Meta:
         verbose_name = "Área geográfica"
         verbose_name_plural = "Áreas geográficas"
@@ -23,6 +87,65 @@ class GeographicArea(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.province})"
+
+
+# G2_WRITE_THROUGH_V1 · GeographicArea SET_NULL propagation.
+# Signals are intentionally limited to this deletion dependency.
+from django.db.models.signals import post_delete as _g2_post_delete
+from django.db.models.signals import pre_delete as _g2_pre_delete
+
+
+def _g2_geographic_area_pre_delete(
+    sender,
+    instance,
+    **kwargs,
+):
+    instance._g2_dependent_profile_ids = list(
+        instance.search_profiles
+        .values_list(
+            "pk",
+            flat=True,
+        )
+    )
+
+
+def _g2_geographic_area_post_delete(
+    sender,
+    instance,
+    **kwargs,
+):
+    profile_ids = getattr(
+        instance,
+        "_g2_dependent_profile_ids",
+        (),
+    )
+
+    if profile_ids:
+        from .geography_bridge import (
+            refresh_search_profiles_by_ids,
+        )
+
+        refresh_search_profiles_by_ids(
+            profile_ids
+        )
+
+
+_g2_pre_delete.connect(
+    _g2_geographic_area_pre_delete,
+    sender=GeographicArea,
+    dispatch_uid=(
+        "sooi.g2.geographic_area.pre_delete"
+    ),
+)
+
+_g2_post_delete.connect(
+    _g2_geographic_area_post_delete,
+    sender=GeographicArea,
+    dispatch_uid=(
+        "sooi.g2.geographic_area.post_delete"
+    ),
+)
+
 
 class SearchProfile(models.Model):
     class GeographyScope(models.TextChoices):
@@ -147,6 +270,31 @@ class SearchProfile(models.Model):
             models.Index(fields=["color"]),
             models.Index(fields=["owner", "status"]),
         ]
+
+    # G2_WRITE_THROUGH_V1
+    def save(self, *args, **kwargs):
+        from .geography_bridge import (
+            prepare_search_profile_for_save,
+        )
+
+        update_fields, _refreshed = (
+            prepare_search_profile_for_save(
+                self,
+                kwargs.get(
+                    "update_fields"
+                ),
+            )
+        )
+
+        if update_fields is not None:
+            kwargs[
+                "update_fields"
+            ] = update_fields
+
+        super().save(
+            *args,
+            **kwargs,
+        )
 
     def __str__(self) -> str:
         return self.name

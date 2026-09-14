@@ -230,6 +230,37 @@ class CapturedProperty(models.Model):
             ),
         ]
 
+    # G2_WRITE_THROUGH_V1
+    def save(self, *args, **kwargs):
+        from apps.busquedas.geography_bridge import (
+            prepare_captured_property_for_save,
+            refresh_inherited_opportunity_from_capture,
+        )
+
+        update_fields, refreshed = (
+            prepare_captured_property_for_save(
+                self,
+                kwargs.get(
+                    "update_fields"
+                ),
+            )
+        )
+
+        if update_fields is not None:
+            kwargs[
+                "update_fields"
+            ] = update_fields
+
+        super().save(
+            *args,
+            **kwargs,
+        )
+
+        if refreshed:
+            refresh_inherited_opportunity_from_capture(
+                self
+            )
+
     def clean(self):
         super().clean()
         is_unknown = (

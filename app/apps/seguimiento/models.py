@@ -324,6 +324,25 @@ class PropertyOpportunity(models.Model):
         return "Alta"
 
     def save(self, *args, **kwargs):
+        # G2_WRITE_THROUGH_V1
+        from apps.busquedas.geography_bridge import (
+            prepare_property_opportunity_for_save,
+        )
+
+        update_fields, _refreshed = (
+            prepare_property_opportunity_for_save(
+                self,
+                kwargs.get(
+                    "update_fields"
+                ),
+            )
+        )
+
+        if update_fields is not None:
+            kwargs[
+                "update_fields"
+            ] = update_fields
+
         if self.asking_price_current and self.expected_rent_monthly:
             try:
                 self.estimated_gross_yield = (
