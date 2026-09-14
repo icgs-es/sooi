@@ -430,7 +430,13 @@ class GeographyRegistry:
 # V1 remains the historical fixture/compatibility registry.
 # Product consumers use load_authority_registry().
 LEGACY_REGISTRY_VERSION = "v1"
-NATIONAL_REGISTRY_VERSION = "v2"
+PREVIOUS_NATIONAL_REGISTRY_VERSION = "v2"
+NATIONAL_REGISTRY_VERSION = "v3"
+SUPPORTED_AUTHORITY_REGISTRY_VERSIONS = frozenset({
+    LEGACY_REGISTRY_VERSION,
+    PREVIOUS_NATIONAL_REGISTRY_VERSION,
+    NATIONAL_REGISTRY_VERSION,
+})
 REGISTRY_VERSION_ENV = "SOOI_GEOGRAPHY_REGISTRY_VERSION"
 
 
@@ -443,10 +449,7 @@ def authority_registry_version() -> str:
     if not requested:
         requested = NATIONAL_REGISTRY_VERSION
 
-    if requested not in {
-        LEGACY_REGISTRY_VERSION,
-        NATIONAL_REGISTRY_VERSION,
-    }:
+    if requested not in SUPPORTED_AUTHORITY_REGISTRY_VERSIONS:
         raise RegistryValidationError(
             "unsupported SOOI geography registry "
             f"authority: {requested!r}"

@@ -24,19 +24,19 @@ class GeoNationalAuthorityV1Tests(SimpleTestCase):
         _default_registry.cache_clear()
         super().tearDown()
 
-    def test_product_authority_defaults_to_v2(self):
+    def test_product_authority_defaults_to_v3(self):
         with mock.patch.dict(
             os.environ,
             {"SOOI_GEOGRAPHY_REGISTRY_VERSION": ""},
         ):
             self.assertEqual(
                 authority_registry_version(),
-                "v2",
+                "v3",
             )
 
             self.assertEqual(
                 load_authority_registry().registry_version,
-                "SOOI_GEOGRAPHY_REGISTRY_ES_V2",
+                "SOOI_GEOGRAPHY_REGISTRY_ES_V3",
             )
 
     def test_historical_default_remains_v1(self):
@@ -44,6 +44,31 @@ class GeoNationalAuthorityV1Tests(SimpleTestCase):
             load_default_registry().registry_version,
             "SOOI_GEOGRAPHY_REGISTRY_V1_2026_08_14",
         )
+
+
+    def test_v2_is_explicit_rollback(self):
+        import os
+        from unittest import mock
+
+        from .geography_registry.loader import (
+            authority_registry_version,
+            load_authority_registry,
+        )
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SOOI_GEOGRAPHY_REGISTRY_VERSION": "v2",
+            },
+        ):
+            self.assertEqual(
+                authority_registry_version(),
+                "v2",
+            )
+            self.assertEqual(
+                load_authority_registry().registry_version,
+                "SOOI_GEOGRAPHY_REGISTRY_ES_V2",
+            )
 
     def test_v1_is_explicit_rollback(self):
         with mock.patch.dict(
