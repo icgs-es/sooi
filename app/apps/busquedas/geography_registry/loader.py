@@ -1,6 +1,7 @@
 """Fail-fast loader for immutable, declarative geography registries."""
 
 from __future__ import annotations
+import os
 
 import hashlib
 import json
@@ -422,6 +423,43 @@ class GeographyRegistry:
                 raise RegistryValidationError(
                     f"unresolvable lookup collision for {lookup!r}: {rendered}"
                 )
+
+
+# SOOI product geography authority.
+#
+# V1 remains the historical fixture/compatibility registry.
+# Product consumers use load_authority_registry().
+LEGACY_REGISTRY_VERSION = "v1"
+NATIONAL_REGISTRY_VERSION = "v2"
+REGISTRY_VERSION_ENV = "SOOI_GEOGRAPHY_REGISTRY_VERSION"
+
+
+def authority_registry_version() -> str:
+    requested = os.environ.get(
+        REGISTRY_VERSION_ENV,
+        NATIONAL_REGISTRY_VERSION,
+    ).strip().casefold()
+
+    if not requested:
+        requested = NATIONAL_REGISTRY_VERSION
+
+    if requested not in {
+        LEGACY_REGISTRY_VERSION,
+        NATIONAL_REGISTRY_VERSION,
+    }:
+        raise RegistryValidationError(
+            "unsupported SOOI geography registry "
+            f"authority: {requested!r}"
+        )
+
+    return requested
+
+
+def load_authority_registry() -> GeographyRegistry:
+    """Load the single product geography authority."""
+    return load_registry(
+        authority_registry_version()
+    )
 
 
 def load_default_registry() -> GeographyRegistry:

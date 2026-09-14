@@ -220,5 +220,5 @@ def _resolved_diagnostic(
 
 @lru_cache(maxsize=1)
 def _default_registry():
-    from .loader import load_default_registry
-    return load_default_registry()
+    from .loader import load_authority_registry
+    return load_authority_registry()

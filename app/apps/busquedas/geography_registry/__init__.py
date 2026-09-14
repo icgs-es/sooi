@@ -5,7 +5,15 @@ product runtime flows.  Consumers must pass candidate evidence independently
 from requested search geography.
 """
 
-from .loader import GeographyRegistry, RegistryValidationError, load_default_registry, load_registry, load_v2_registry
+from .loader import (
+    GeographyRegistry,
+    RegistryValidationError,
+    authority_registry_version,
+    load_authority_registry,
+    load_default_registry,
+    load_registry,
+    load_v2_registry,
+)
 from .models import (
     AliasRecord,
     GeographyIdentity,
@@ -29,6 +37,8 @@ __all__ = (
     "RegistryValidationError",
     "ResolutionProvenance",
     "ResolutionStatus",
+    "authority_registry_version",
+    "load_authority_registry",
     "load_default_registry",
     "load_registry",
     "load_v2_registry",

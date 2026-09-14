@@ -18,6 +18,10 @@ def profile(*locations, province="Málaga", scope="municipality"):
     )
 
 
+@mock.patch.dict(
+    os.environ,
+    {"SOOI_GEOGRAPHY_REGISTRY_VERSION": "v1"},
+)
 class GeographyRuntimeSR012DTests(TestCase):
     def test_flag_off_is_legacy(self):
         with mock.patch.dict(os.environ, {"SOOI_GEOGRAPHY_RUNTIME_V1": "0"}):

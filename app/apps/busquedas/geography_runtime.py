@@ -7,10 +7,9 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .geography_registry import (
-    GeographyType, ResolutionStatus, load_default_registry,
+    GeographyType, ResolutionStatus, load_authority_registry,
     normalize_geography_input, resolve,
 )
-from .geography_registry.loader import load_registry
 
 GEOGRAPHY_RUNTIME_CONTRACT = "SOOI_GEOGRAPHY_RUNTIME_V1"
 GEOGRAPHY_RUNTIME_MODE = "COMPAT"
@@ -79,10 +78,32 @@ class ResolvedSearchGeography:
 
     @property
     def query_labels(self) -> list[str]:
+        """Canonical labels used for geography context."""
         return [unit.query_label for unit in self.units]
 
+    @property
+    def transport_labels(self) -> list[str]:
+        """Compatibility labels used by existing search/provider flows."""
+        labels = []
+
+        for unit in self.units:
+            if (
+                unit.resolution_status
+                == ResolutionStatus.ALIAS_RESOLVED.value
+                and unit.canonical_name
+            ):
+                labels.append(
+                    unit.canonical_name
+                )
+            else:
+                labels.append(
+                    unit.raw_value
+                )
+
+        return labels
+
     def to_snapshot(self) -> dict[str, Any]:
-        registry = load_default_registry()
+        registry = load_authority_registry()
         coverage = [
             {
                 "raw": unit.raw_value, "canonical": unit.canonical_name,
@@ -109,7 +130,7 @@ def resolve_search_geography(
     registry=None,
 ) -> ResolvedSearchGeography:
     if registry is None:
-        registry = load_registry(os.environ.get("SOOI_GEOGRAPHY_REGISTRY_VERSION", "v1"))
+        registry = load_authority_registry()
     expected = (
         (GeographyType.MUNICIPALITY, GeographyType.DISTRICT)
         if scope in {"municipality", "multi_municipality", "legacy", "multi_location"}
@@ -167,7 +188,13 @@ def resolve_profile_geography(profile) -> ResolvedSearchGeography:
 
 def runtime_search_locations(profile) -> list[str]:
     raw = list(profile.canonical_search_locations())
-    return resolve_profile_geography(profile).query_labels if geography_runtime_enabled() else raw
+
+    if not geography_runtime_enabled():
+        return raw
+
+    return resolve_profile_geography(
+        profile
+    ).transport_labels
 
 
 def geography_snapshot_for_profile(profile) -> dict[str, Any]:
@@ -194,11 +221,23 @@ def candidate_location_match(intent_rows: list[dict[str, Any]], candidate_value:
     if not resolved_intent:
         return "LEGACY"
     province_hint = None
-    candidate = resolve(raw, province_hint=province_hint,
-                        expected_type=(GeographyType.MUNICIPALITY, GeographyType.DISTRICT))
-    if candidate.status not in _RESOLVED or not candidate.canonical_key:
+    registry = load_authority_registry()
+
+    candidate = resolve(
+        raw,
+        province_hint=province_hint,
+        expected_type=(
+            GeographyType.MUNICIPALITY,
+            GeographyType.DISTRICT,
+        ),
+        registry=registry,
+    )
+
+    if (
+        candidate.status not in _RESOLVED
+        or not candidate.canonical_key
+    ):
         return "UNKNOWN"
-    registry = load_default_registry()
     evidence = registry.identities[candidate.canonical_key]
     parent_only = False
     for row in resolved_intent:
