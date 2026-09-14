@@ -6,7 +6,7 @@ services:
     container_name: sooi_db
     restart: unless-stopped
     env_file:
-      - ./env/dev.env
+      - ./env/db.env
     environment:
       SOOI_USE_HYBRID_V2614: "0"
       SOOI_HYBRID_V2614_WRITE: "1"
