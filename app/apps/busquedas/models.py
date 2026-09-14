@@ -124,6 +124,16 @@ class SearchProfile(models.Model):
         verbose_name="propietario",
     )
     
+
+
+    # G2 · persistent geography compatibility bridge.
+    # Existing raw geography remains source evidence.
+    geography_bridge_snapshot = models.JSONField(
+        "snapshot del puente geográfico",
+        null=True,
+        blank=True,
+    )
+
     class Meta:
         verbose_name = "Perfil de búsqueda"
         verbose_name_plural = "Perfiles de búsqueda"

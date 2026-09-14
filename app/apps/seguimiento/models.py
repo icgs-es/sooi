@@ -247,6 +247,42 @@ class PropertyOpportunity(models.Model):
     created_at = models.DateTimeField("creado", auto_now_add=True)
     updated_at = models.DateTimeField("actualizado", auto_now=True)
 
+
+
+    # G2 · persistent canonical geography identity.
+    # Raw province / municipality remain unchanged.
+    geo_canonical_key = models.CharField(
+        "clave geográfica canónica",
+        max_length=128,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    geo_resolution_status = models.CharField(
+        "estado de resolución geográfica",
+        max_length=32,
+        null=True,
+        blank=True,
+    )
+    geo_resolution_method = models.CharField(
+        "método de resolución geográfica",
+        max_length=64,
+        null=True,
+        blank=True,
+    )
+    geo_registry_version = models.CharField(
+        "versión del registro geográfico",
+        max_length=128,
+        null=True,
+        blank=True,
+    )
+    geo_registry_digest = models.CharField(
+        "digest del registro geográfico",
+        max_length=80,
+        null=True,
+        blank=True,
+    )
+
     class Meta:
         verbose_name = "Oportunidad inmobiliaria"
         verbose_name_plural = "Oportunidades inmobiliarias"
