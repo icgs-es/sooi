@@ -28,6 +28,7 @@ urlpatterns = [
     path("agenda/", agenda_view, name="agenda_view"),
     path("oportunidades/", opportunity_list, name="opportunity_list"),
     path("oportunidades/mapa/datos/", opportunity_map_dataset, name="opportunity_map_dataset"),
+    path("oportunidades/mapa/contexto/", seguimiento_views.opportunity_map_municipal_context, name="opportunity_map_municipal_context"),
     path("oportunidades/accion-masiva/descartar/", seguimiento_views.opportunity_bulk_discard, name="opportunity_bulk_discard"),
     path("oportunidades/<int:pk>/", opportunity_detail, name="opportunity_detail"),
     path("oportunidades/<int:pk>/editar/", opportunity_edit, name="opportunity_edit"),

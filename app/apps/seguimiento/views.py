@@ -1,4 +1,8 @@
 from apps.seguimiento.map_dataset import build_opportunity_map_dataset
+from apps.busquedas.geography_municipal_context import (
+    CONTRACT as MUNICIPAL_CONTEXT_CONTRACT,
+    get_municipal_context,
+)
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
@@ -1044,6 +1048,82 @@ def opportunity_map_dataset(request):
 
     return JsonResponse(
         payload,
+        json_dumps_params={
+            "ensure_ascii": False,
+        },
+    )
+
+@login_required
+@require_GET
+def opportunity_map_municipal_context(request):
+    """
+    Authenticated municipal context for a municipality visible
+    in the current user's operational opportunity scope.
+
+    This endpoint does not expose the national context registry
+    as a public lookup service.
+    """
+    canonical_key = (
+        request.GET.get("canonical_key", "")
+        .strip()
+    )
+
+    if not canonical_key:
+        return JsonResponse(
+            {
+                "detail":
+                    "canonical_key is required",
+            },
+            status=400,
+        )
+
+    visible = (
+        PropertyOpportunity.objects
+        .filter(
+            owner=request.user,
+            geo_canonical_key=canonical_key,
+        )
+        .exclude(
+            status=(
+                PropertyOpportunity
+                .Status
+                .DISCARDED
+            ),
+        )
+        .exists()
+    )
+
+    if not visible:
+        return JsonResponse(
+            {
+                "detail":
+                    "Municipal context not available",
+            },
+            status=404,
+        )
+
+    context = get_municipal_context(
+        canonical_key
+    )
+
+    if context is None:
+        return JsonResponse(
+            {
+                "detail":
+                    "Municipal context not available",
+            },
+            status=404,
+        )
+
+    return JsonResponse(
+        {
+            "contract":
+                MUNICIPAL_CONTEXT_CONTRACT,
+            "canonical_key":
+                canonical_key,
+            "context":
+                context,
+        },
         json_dumps_params={
             "ensure_ascii": False,
         },
