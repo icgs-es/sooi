@@ -58,6 +58,130 @@
     </form>
   </div>
 
+  {# SOOI_G3_OPPORTUNITY_MAP_PILOT_UI_V1_START #}
+  <section
+    id="opp-map-pilot"
+    class="page-card opp-map-card"
+    data-endpoint="{% url 'opportunity_map_dataset' %}"
+    data-tile-url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    aria-labelledby="opp-map-title"
+  >
+    <div class="opp-map-card__head">
+      <div class="opp-map-card__heading">
+        <span class="opp-map-card__eyebrow">Mapa piloto</span>
+
+        <h2 id="opp-map-title">
+          Oportunidades operativas por municipio
+        </h2>
+
+        <p>
+          Ubicación aproximada a nivel municipal.
+          El marcador no representa la posición exacta del inmueble.
+        </p>
+
+        <small class="opp-map-card__scope">
+          El mapa muestra todas tus oportunidades operativas.
+          En este piloto, los filtros de la tabla no modifican el mapa.
+        </small>
+      </div>
+
+      <div class="opp-map-card__stats" aria-live="polite">
+        <span id="opp-map-opportunity-count">— oportunidades</span>
+        <span id="opp-map-municipality-count">— municipios</span>
+      </div>
+    </div>
+
+    <div class="opp-map-layout">
+      <div class="opp-map-canvas-wrap">
+        <div
+          id="opp-map-canvas"
+          class="opp-map-canvas"
+          role="region"
+          aria-label="Mapa de oportunidades por municipio"
+        ></div>
+
+        <div
+          id="opp-map-loading"
+          class="opp-map-state"
+        >
+          Preparando mapa…
+        </div>
+
+        <div
+          id="opp-map-error"
+          class="opp-map-state opp-map-state--error"
+          hidden
+        >
+          No se ha podido cargar el mapa.
+          El listado de oportunidades sigue disponible.
+        </div>
+
+        <div
+          id="opp-map-tile-warning"
+          class="opp-map-tile-warning"
+          hidden
+        >
+          El fondo cartográfico no está disponible temporalmente.
+        </div>
+
+        <div class="opp-map-precision">
+          <span class="opp-map-precision__dot"></span>
+          Ubicación aproximada a nivel municipal
+        </div>
+      </div>
+
+      <aside
+        class="opp-map-panel"
+        aria-label="Oportunidades del municipio seleccionado"
+        aria-live="polite"
+      >
+        <div
+          id="opp-map-panel-empty"
+          class="opp-map-panel__empty"
+        >
+          Selecciona un municipio en el mapa para ver sus oportunidades.
+        </div>
+
+        <div
+          id="opp-map-panel-content"
+          hidden
+        >
+          <div class="opp-map-panel__head">
+            <div>
+              <span class="opp-map-panel__eyebrow">
+                Municipio seleccionado
+              </span>
+
+              <h3 id="opp-map-panel-title">
+                —
+              </h3>
+            </div>
+
+            <span
+              id="opp-map-panel-count"
+              class="opp-map-panel__count"
+            >
+              —
+            </span>
+          </div>
+
+          <div
+            id="opp-map-panel-list"
+            class="opp-map-panel__list"
+          ></div>
+        </div>
+      </aside>
+    </div>
+
+    <noscript>
+      <div class="opp-map-noscript">
+        Activa JavaScript para utilizar el mapa.
+        El listado de oportunidades continúa disponible.
+      </div>
+    </noscript>
+  </section>
+  {# SOOI_G3_OPPORTUNITY_MAP_PILOT_UI_V1_END #}
+
   <div class="page-card opp-table-card">
     {% if opportunities %}
       <form
@@ -1039,5 +1163,1073 @@
       }
     }
   </style>
+
+
+  <style>
+    /* SOOI_G3_OPPORTUNITY_MAP_PILOT_UI_V1_STYLE */
+
+    .opp-map-card {
+      margin:18px 0 20px;
+      padding:20px !important;
+      overflow:hidden;
+    }
+
+    .opp-map-card__head {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:20px;
+      margin-bottom:16px;
+    }
+
+    .opp-map-card__heading {
+      min-width:0;
+    }
+
+    .opp-map-card__eyebrow,
+    .opp-map-panel__eyebrow {
+      display:block;
+      margin-bottom:5px;
+      color:#64748b;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .opp-map-card__heading h2 {
+      margin:0 0 6px;
+      color:#0f172a;
+      font-size:20px;
+      line-height:1.2;
+    }
+
+    .opp-map-card__heading p {
+      margin:0;
+      color:#475569;
+      font-size:12.5px;
+      line-height:1.45;
+    }
+
+    .opp-map-card__scope {
+      display:block;
+      margin-top:5px;
+      color:#94a3b8;
+      font-size:10.5px;
+      line-height:1.35;
+    }
+
+    .opp-map-card__stats {
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      gap:7px;
+      flex:0 0 auto;
+    }
+
+    .opp-map-card__stats span,
+    .opp-map-panel__count {
+      display:inline-flex;
+      align-items:center;
+      min-height:28px;
+      padding:5px 9px;
+      border:1px solid #dbe3ee;
+      border-radius:999px;
+      background:#f8fafc;
+      color:#475569;
+      font-size:10.5px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    .opp-map-layout {
+      display:grid;
+      grid-template-columns:minmax(0, 1.55fr) minmax(280px, .72fr);
+      gap:14px;
+      align-items:stretch;
+    }
+
+    .opp-map-canvas-wrap {
+      position:relative;
+      min-width:0;
+      min-height:460px;
+      border:1px solid #dbe3ee;
+      border-radius:16px;
+      overflow:hidden;
+      background:#eef2f7;
+    }
+
+    .opp-map-canvas {
+      width:100%;
+      height:460px;
+      background:#eef2f7;
+    }
+
+    .opp-map-canvas.leaflet-container {
+      font-family:Arial, sans-serif;
+    }
+
+    .opp-map-state {
+      position:absolute;
+      inset:0;
+      z-index:500;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(248,250,252,.94);
+      color:#475569;
+      font-size:13px;
+      font-weight:700;
+      text-align:center;
+    }
+
+    .opp-map-state[hidden] {
+      display:none;
+    }
+
+    .opp-map-state--error {
+      color:#991b1b;
+      background:rgba(254,242,242,.95);
+    }
+
+    .opp-map-tile-warning {
+      position:absolute;
+      top:10px;
+      left:50%;
+      z-index:550;
+      transform:translateX(-50%);
+      max-width:calc(100% - 24px);
+      padding:7px 10px;
+      border:1px solid #fde68a;
+      border-radius:9px;
+      background:rgba(255,251,235,.96);
+      color:#92400e;
+      font-size:10px;
+      font-weight:700;
+      text-align:center;
+    }
+
+    .opp-map-precision {
+      position:absolute;
+      left:10px;
+      bottom:10px;
+      z-index:450;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      max-width:calc(100% - 20px);
+      padding:6px 9px;
+      border:1px solid rgba(203,213,225,.95);
+      border-radius:9px;
+      background:rgba(255,255,255,.94);
+      color:#475569;
+      font-size:9.5px;
+      font-weight:700;
+      line-height:1.25;
+      box-shadow:0 4px 14px rgba(15,23,42,.08);
+      pointer-events:none;
+    }
+
+    .opp-map-precision__dot {
+      width:8px;
+      height:8px;
+      flex:0 0 8px;
+      border-radius:999px;
+      background:var(--module-accent, #69b99a);
+    }
+
+    .opp-map-panel {
+      min-width:0;
+      height:460px;
+      padding:15px;
+      border:1px solid #dbe3ee;
+      border-radius:16px;
+      background:#f8fafc;
+      overflow-y:auto;
+    }
+
+    .opp-map-panel__empty {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100%;
+      padding:20px;
+      color:#64748b;
+      font-size:12px;
+      line-height:1.5;
+      text-align:center;
+    }
+
+    .opp-map-panel__head {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:12px;
+    }
+
+    .opp-map-panel__head h3 {
+      margin:0;
+      color:#0f172a;
+      font-size:16px;
+      line-height:1.25;
+    }
+
+    .opp-map-panel__list {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .opp-map-opportunity {
+      padding:11px;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      background:#fff;
+    }
+
+    .opp-map-opportunity__title {
+      display:block;
+      margin-bottom:6px;
+      color:#0f172a;
+      font-size:12px;
+      font-weight:800;
+      line-height:1.35;
+      text-decoration:none;
+    }
+
+    .opp-map-opportunity__title:hover {
+      text-decoration:underline;
+    }
+
+    .opp-map-opportunity__badges {
+      display:flex;
+      flex-wrap:wrap;
+      gap:5px;
+      margin-bottom:7px;
+    }
+
+    .opp-map-opportunity__badge {
+      display:inline-flex;
+      align-items:center;
+      min-height:22px;
+      padding:3px 7px;
+      border-radius:999px;
+      background:#f1f5f9;
+      color:#475569;
+      font-size:9.5px;
+      font-weight:800;
+      line-height:1;
+    }
+
+    .opp-map-opportunity__badge--priority-high {
+      background:#fff7ed;
+      color:#9a3412;
+    }
+
+    .opp-map-opportunity__price {
+      margin-bottom:5px;
+      color:#0f172a;
+      font-size:12px;
+      font-weight:800;
+    }
+
+    .opp-map-opportunity__meta {
+      color:#64748b;
+      font-size:10.5px;
+      line-height:1.4;
+    }
+
+    .opp-map-opportunity__action {
+      display:inline-flex;
+      margin-top:9px;
+      align-items:center;
+      min-height:27px;
+      padding:0 8px;
+      border:1px solid #dbe3ee;
+      border-radius:8px;
+      background:#fff;
+      color:#334155;
+      font-size:10px;
+      font-weight:800;
+      text-decoration:none;
+    }
+
+    .opp-map-opportunity__action:hover {
+      background:#f8fafc;
+    }
+
+    .opp-map-marker-wrap {
+      background:transparent !important;
+      border:0 !important;
+    }
+
+    .opp-map-marker {
+      display:flex;
+      width:40px;
+      height:40px;
+      align-items:center;
+      justify-content:center;
+      border:3px solid #fff;
+      border-radius:999px;
+      background:var(--module-accent, #69b99a);
+      color:#fff;
+      font-size:12px;
+      font-weight:900;
+      box-shadow:0 5px 14px rgba(15,23,42,.28);
+      transition:transform .14s ease, box-shadow .14s ease;
+    }
+
+    .opp-map-marker-wrap.is-selected .opp-map-marker {
+      transform:scale(1.16);
+      box-shadow:
+        0 0 0 4px rgba(105,185,154,.23),
+        0 7px 18px rgba(15,23,42,.30);
+    }
+
+    .opp-map-noscript {
+      margin-top:12px;
+      padding:10px 12px;
+      border:1px solid #fde68a;
+      border-radius:10px;
+      background:#fffbeb;
+      color:#92400e;
+      font-size:11px;
+    }
+
+    @media (max-width: 1100px) {
+      .opp-map-layout {
+        grid-template-columns:minmax(0, 1fr) 300px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .opp-map-card__head {
+        flex-direction:column;
+      }
+
+      .opp-map-card__stats {
+        justify-content:flex-start;
+      }
+
+      .opp-map-layout {
+        grid-template-columns:1fr;
+      }
+
+      .opp-map-canvas-wrap,
+      .opp-map-panel {
+        min-height:0;
+        height:auto;
+      }
+
+      .opp-map-canvas {
+        height:380px;
+      }
+
+      .opp-map-panel {
+        max-height:420px;
+      }
+
+      .opp-map-panel__empty {
+        min-height:110px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .opp-map-card {
+        margin-left:0;
+        margin-right:0;
+        padding:12px !important;
+        border-radius:14px !important;
+      }
+
+      .opp-map-card__heading h2 {
+        font-size:17px;
+      }
+
+      .opp-map-card__stats {
+        width:100%;
+      }
+
+      .opp-map-card__stats span {
+        flex:1 1 auto;
+        justify-content:center;
+      }
+
+      .opp-map-canvas {
+        height:320px;
+      }
+
+      .opp-map-canvas-wrap,
+      .opp-map-panel {
+        border-radius:12px;
+      }
+
+      .opp-map-panel {
+        padding:11px;
+        max-height:none;
+      }
+
+      .opp-map-precision {
+        right:8px;
+        left:8px;
+        bottom:8px;
+        max-width:none;
+      }
+    }
+  </style>
+
+  <script>
+    /* SOOI_G3_OPPORTUNITY_MAP_PILOT_UI_V1_BEHAVIOR */
+    (function () {
+      "use strict";
+
+      const root = document.getElementById("opp-map-pilot");
+
+      if (!root) {
+        return;
+      }
+
+      const endpoint = root.dataset.endpoint;
+      const tileUrl = root.dataset.tileUrl;
+
+      const canvas = document.getElementById("opp-map-canvas");
+      const loading = document.getElementById("opp-map-loading");
+      const errorState = document.getElementById("opp-map-error");
+      const tileWarning = document.getElementById("opp-map-tile-warning");
+
+      const opportunityCount = document.getElementById("opp-map-opportunity-count");
+      const municipalityCount = document.getElementById("opp-map-municipality-count");
+
+      const panelEmpty = document.getElementById("opp-map-panel-empty");
+      const panelContent = document.getElementById("opp-map-panel-content");
+      const panelTitle = document.getElementById("opp-map-panel-title");
+      const panelCount = document.getElementById("opp-map-panel-count");
+      const panelList = document.getElementById("opp-map-panel-list");
+
+      const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
+      const LEAFLET_CSS_INTEGRITY =
+        "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=";
+
+      const LEAFLET_JS_INTEGRITY =
+        "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=";
+
+      let map = null;
+      let selectedMarker = null;
+
+
+      function humanize(value) {
+        const text = String(value || "")
+          .replace(/[_-]+/g, " ")
+          .trim();
+
+        if (!text) {
+          return "—";
+        }
+
+        return text.charAt(0).toUpperCase() + text.slice(1);
+      }
+
+
+      function formatPrice(value) {
+        if (value === null || value === undefined || value === "") {
+          return "Precio no informado";
+        }
+
+        const number = Number(value);
+
+        if (!Number.isFinite(number)) {
+          return String(value) + " €";
+        }
+
+        return new Intl.NumberFormat(
+          "es-ES",
+          {
+            style: "currency",
+            currency: "EUR",
+            maximumFractionDigits: 0
+          }
+        ).format(number);
+      }
+
+
+      function safeDetailUrl(value) {
+        try {
+          const url = new URL(
+            String(value || ""),
+            window.location.origin
+          );
+
+          if (url.origin !== window.location.origin) {
+            return "#";
+          }
+
+          if (!url.pathname.startsWith("/app/oportunidades/")) {
+            return "#";
+          }
+
+          return url.pathname + url.search + url.hash;
+        } catch (error) {
+          return "#";
+        }
+      }
+
+
+      function appendText(parent, className, text) {
+        const element = document.createElement("div");
+
+        element.className = className;
+        element.textContent = text;
+
+        parent.appendChild(element);
+
+        return element;
+      }
+
+
+      function createBadge(text, extraClass) {
+        const badge = document.createElement("span");
+
+        badge.className =
+          "opp-map-opportunity__badge"
+          + (extraClass ? " " + extraClass : "");
+
+        badge.textContent = text;
+
+        return badge;
+      }
+
+
+      function renderPanel(feature) {
+        const properties = feature && feature.properties
+          ? feature.properties
+          : {};
+
+        const opportunities = Array.isArray(properties.opportunities)
+          ? properties.opportunities
+          : [];
+
+        const first = opportunities.length
+          ? opportunities[0]
+          : {};
+
+        const location = [
+          first.municipality,
+          first.province
+        ].filter(Boolean).join(", ");
+
+        panelTitle.textContent = location || "Municipio";
+
+        panelCount.textContent =
+          opportunities.length
+          + (
+            opportunities.length === 1
+              ? " oportunidad"
+              : " oportunidades"
+          );
+
+        panelList.replaceChildren();
+
+        opportunities.forEach(function (opportunity) {
+          const card = document.createElement("article");
+
+          card.className = "opp-map-opportunity";
+
+          const title = document.createElement("a");
+
+          title.className = "opp-map-opportunity__title";
+          title.href = safeDetailUrl(opportunity.detail_url);
+          title.textContent = opportunity.title || "Oportunidad";
+
+          card.appendChild(title);
+
+          const badges = document.createElement("div");
+
+          badges.className = "opp-map-opportunity__badges";
+
+          badges.appendChild(
+            createBadge(
+              humanize(opportunity.status),
+              ""
+            )
+          );
+
+          const priorityClass =
+            String(opportunity.priority || "").toLowerCase() === "high"
+              ? "opp-map-opportunity__badge--priority-high"
+              : "";
+
+          badges.appendChild(
+            createBadge(
+              "Prioridad " + humanize(opportunity.priority),
+              priorityClass
+            )
+          );
+
+          if (
+            opportunity.opportunity_score !== null
+            && opportunity.opportunity_score !== undefined
+          ) {
+            badges.appendChild(
+              createBadge(
+                "Score " + String(opportunity.opportunity_score),
+                ""
+              )
+            );
+          }
+
+          card.appendChild(badges);
+
+          appendText(
+            card,
+            "opp-map-opportunity__price",
+            formatPrice(opportunity.asking_price_current)
+          );
+
+          const metaParts = [];
+
+          if (opportunity.zone) {
+            metaParts.push(opportunity.zone);
+          }
+
+          if (opportunity.source_name) {
+            metaParts.push(opportunity.source_name);
+          }
+
+          if (metaParts.length) {
+            appendText(
+              card,
+              "opp-map-opportunity__meta",
+              metaParts.join(" · ")
+            );
+          }
+
+          const action = document.createElement("a");
+
+          action.className = "opp-map-opportunity__action";
+          action.href = safeDetailUrl(opportunity.detail_url);
+          action.textContent = "Ver ficha";
+
+          card.appendChild(action);
+
+          panelList.appendChild(card);
+        });
+
+        panelEmpty.hidden = true;
+        panelContent.hidden = false;
+      }
+
+
+      function markSelected(marker) {
+        if (selectedMarker) {
+          const oldElement = selectedMarker.getElement();
+
+          if (oldElement) {
+            oldElement.classList.remove("is-selected");
+          }
+        }
+
+        selectedMarker = marker;
+
+        const currentElement = marker.getElement();
+
+        if (currentElement) {
+          currentElement.classList.add("is-selected");
+        }
+      }
+
+
+      function selectFeature(feature, marker) {
+        markSelected(marker);
+        renderPanel(feature);
+      }
+
+
+      function loadLeaflet() {
+        if (
+          window.L
+          && typeof window.L.map === "function"
+        ) {
+          return Promise.resolve(window.L);
+        }
+
+        return new Promise(function (resolve, reject) {
+          if (!document.querySelector('link[data-sooi-leaflet="1"]')) {
+            const link = document.createElement("link");
+
+            link.rel = "stylesheet";
+            link.href = LEAFLET_CSS;
+            link.integrity = LEAFLET_CSS_INTEGRITY;
+            link.crossOrigin = "anonymous";
+            link.dataset.sooiLeaflet = "1";
+
+            document.head.appendChild(link);
+          }
+
+          const existing = document.querySelector(
+            'script[data-sooi-leaflet="1"]'
+          );
+
+          if (existing) {
+            existing.addEventListener(
+              "load",
+              function () {
+                resolve(window.L);
+              },
+              { once: true }
+            );
+
+            existing.addEventListener(
+              "error",
+              function () {
+                reject(new Error("Leaflet no disponible"));
+              },
+              { once: true }
+            );
+
+            return;
+          }
+
+          const script = document.createElement("script");
+
+          script.src = LEAFLET_JS;
+          script.integrity = LEAFLET_JS_INTEGRITY;
+          script.crossOrigin = "anonymous";
+          script.dataset.sooiLeaflet = "1";
+
+          script.addEventListener(
+            "load",
+            function () {
+              if (
+                window.L
+                && typeof window.L.map === "function"
+              ) {
+                resolve(window.L);
+              } else {
+                reject(new Error("Leaflet inválido"));
+              }
+            },
+            { once: true }
+          );
+
+          script.addEventListener(
+            "error",
+            function () {
+              reject(new Error("No se pudo cargar Leaflet"));
+            },
+            { once: true }
+          );
+
+          document.head.appendChild(script);
+        });
+      }
+
+
+      function showError(message) {
+        loading.hidden = true;
+
+        errorState.textContent =
+          message
+          || "No se ha podido cargar el mapa. "
+          + "El listado de oportunidades sigue disponible.";
+
+        errorState.hidden = false;
+      }
+
+
+      async function boot() {
+        const controller = new AbortController();
+
+        const timeout = window.setTimeout(
+          function () {
+            controller.abort();
+          },
+          12000
+        );
+
+        try {
+          const response = await fetch(
+            endpoint,
+            {
+              method: "GET",
+              credentials: "same-origin",
+              headers: {
+                "Accept": "application/json"
+              },
+              signal: controller.signal
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(
+              "Dataset HTTP " + response.status
+            );
+          }
+
+          const payload = await response.json();
+
+          if (
+            payload.contract
+            !== "SOOI_G3_OPPORTUNITY_MAP_DATASET_V1"
+          ) {
+            throw new Error(
+              "Contrato de mapa inesperado"
+            );
+          }
+
+          const features = Array.isArray(payload.features)
+            ? payload.features
+            : [];
+
+          const meta = payload.meta || {};
+
+          const totalVisible = Number.isFinite(
+            Number(meta.opportunities_total_visible)
+          )
+            ? Number(meta.opportunities_total_visible)
+            : 0;
+
+          const totalMunicipalities = Number.isFinite(
+            Number(meta.municipality_features)
+          )
+            ? Number(meta.municipality_features)
+            : features.length;
+
+          opportunityCount.textContent =
+            totalVisible
+            + (
+              totalVisible === 1
+                ? " oportunidad"
+                : " oportunidades"
+            );
+
+          municipalityCount.textContent =
+            totalMunicipalities
+            + (
+              totalMunicipalities === 1
+                ? " municipio"
+                : " municipios"
+            );
+
+          if (!features.length) {
+            loading.textContent =
+              "No hay oportunidades con referencia municipal para mostrar.";
+
+            panelEmpty.textContent =
+              "Cuando existan oportunidades operativas con referencia "
+              + "municipal aparecerán aquí.";
+
+            return;
+          }
+
+          const L = await loadLeaflet();
+
+          loading.hidden = true;
+
+          map = L.map(
+            canvas,
+            {
+              scrollWheelZoom: false,
+              zoomControl: true,
+              attributionControl: true,
+              preferCanvas: true
+            }
+          );
+
+          map.setView(
+            [40.15, -3.7],
+            5
+          );
+
+          const tiles = L.tileLayer(
+            tileUrl,
+            {
+              minZoom: 4,
+              maxZoom: 18,
+              attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright" '
+                + 'target="_blank" rel="noopener noreferrer">'
+                + 'OpenStreetMap</a> contributors'
+            }
+          );
+
+          let tileErrorSeen = false;
+
+          tiles.on(
+            "tileerror",
+            function () {
+              if (!tileErrorSeen) {
+                tileErrorSeen = true;
+                tileWarning.hidden = false;
+              }
+            }
+          );
+
+          tiles.addTo(map);
+
+          L.control.scale(
+            {
+              imperial: false,
+              maxWidth: 100
+            }
+          ).addTo(map);
+
+          const bounds = [];
+          const selectable = [];
+
+          features.forEach(function (feature) {
+            const geometry = feature && feature.geometry
+              ? feature.geometry
+              : {};
+
+            const coordinates = Array.isArray(geometry.coordinates)
+              ? geometry.coordinates
+              : [];
+
+            const longitude = Number(coordinates[0]);
+            const latitude = Number(coordinates[1]);
+
+            if (
+              !Number.isFinite(longitude)
+              || !Number.isFinite(latitude)
+            ) {
+              return;
+            }
+
+            const properties = feature.properties || {};
+
+            const count = Math.max(
+              0,
+              Number.parseInt(
+                properties.opportunity_count,
+                10
+              ) || 0
+            );
+
+            const opportunities = Array.isArray(properties.opportunities)
+              ? properties.opportunities
+              : [];
+
+            const first = opportunities.length
+              ? opportunities[0]
+              : {};
+
+            const place = [
+              first.municipality,
+              first.province
+            ].filter(Boolean).join(", ") || "Municipio";
+
+            const title =
+              place
+              + ": "
+              + count
+              + (
+                count === 1
+                  ? " oportunidad"
+                  : " oportunidades"
+              );
+
+            const icon = L.divIcon(
+              {
+                className: "opp-map-marker-wrap",
+                html:
+                  '<span class="opp-map-marker" aria-hidden="true">'
+                  + String(count)
+                  + "</span>",
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+              }
+            );
+
+            const marker = L.marker(
+              [latitude, longitude],
+              {
+                icon: icon,
+                title: title,
+                alt: title,
+                keyboard: true
+              }
+            );
+
+            marker.on(
+              "click",
+              function () {
+                selectFeature(
+                  feature,
+                  marker
+                );
+              }
+            );
+
+            marker.addTo(map);
+
+            bounds.push(
+              [latitude, longitude]
+            );
+
+            selectable.push(
+              {
+                feature: feature,
+                marker: marker
+              }
+            );
+          });
+
+          if (!bounds.length) {
+            throw new Error(
+              "No hay geometrías válidas"
+            );
+          }
+
+          if (bounds.length === 1) {
+            map.setView(
+              bounds[0],
+              9
+            );
+          } else {
+            map.fitBounds(
+              L.latLngBounds(bounds),
+              {
+                padding: [34, 34],
+                maxZoom: 9
+              }
+            );
+          }
+
+          if (selectable.length) {
+            selectFeature(
+              selectable[0].feature,
+              selectable[0].marker
+            );
+          }
+
+          window.setTimeout(
+            function () {
+              map.invalidateSize();
+            },
+            0
+          );
+        } catch (error) {
+          console.error(
+            "[SOOI G3 map pilot]",
+            error
+          );
+
+          showError(
+            "No se ha podido cargar el mapa. "
+            + "El listado de oportunidades sigue disponible."
+          );
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      }
+
+
+      boot();
+    })();
+  </script>
 
 {% endblock %}
