@@ -63,6 +63,7 @@
     id="opp-map-pilot"
     class="page-card opp-map-card"
     data-endpoint="{% url 'opportunity_map_dataset' %}"
+    data-context-endpoint="{% url 'opportunity_map_municipal_context' %}"
     data-map-style="https://tiles.openfreemap.org/styles/liberty"
     aria-labelledby="opp-map-title"
   >
@@ -164,6 +165,40 @@
               —
             </span>
           </div>
+
+          {# SOOI_MUNICIPAL_CONTEXT_V1_UI #}
+          <section id="opp-municipal-context"
+                   class="opp-municipal-context"
+                   hidden>
+            <div class="opp-municipal-context__head">
+              <div>
+                <span>Contexto municipal</span>
+                <strong id="opp-context-location">—</strong>
+                <small id="opp-context-community">—</small>
+              </div>
+              <b>NGMEP 2026</b>
+            </div>
+
+            <div id="opp-context-loading">Cargando contexto…</div>
+            <div id="opp-context-error" hidden>Contexto no disponible.</div>
+
+            <div id="opp-context-content" hidden>
+              <div class="opp-municipal-context__grid">
+                <div><span>Habitantes</span><strong id="opp-context-population">—</strong><small>INE · 1 ene 2025</small></div>
+                <div><span>Altitud</span><strong id="opp-context-altitude">—</strong></div>
+                <div><span>Superficie</span><strong id="opp-context-surface">—</strong></div>
+                <div><span>Densidad</span><strong id="opp-context-density">—</strong></div>
+              </div>
+
+              <div id="opp-context-capital"
+                   class="opp-municipal-context__capital"></div>
+
+              <small class="opp-municipal-context__note">
+                Distancia en línea recta entre puntos municipales de referencia.
+                No equivale a distancia por carretera.
+              </small>
+            </div>
+          </section>
 
           <div
             id="opp-map-panel-list"
@@ -1730,6 +1765,107 @@
     }
   </style>
 
+  <style>
+    /* SOOI_MUNICIPAL_CONTEXT_V1_STYLE */
+
+    .opp-municipal-context {
+      margin:0 0 10px;
+      padding:11px;
+      border:1px solid #dbe3ee;
+      border-radius:12px;
+      background:#fff;
+    }
+
+    .opp-municipal-context[hidden],
+    .opp-municipal-context [hidden] {
+      display:none !important;
+    }
+
+    .opp-municipal-context__head {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:9px;
+    }
+
+    .opp-municipal-context__head span,
+    .opp-municipal-context__grid span {
+      display:block;
+      color:#64748b;
+      font-size:9px;
+      font-weight:800;
+      text-transform:uppercase;
+    }
+
+    .opp-municipal-context__head strong {
+      display:block;
+      margin-top:2px;
+      font-size:12px;
+    }
+
+    .opp-municipal-context__head small {
+      color:#64748b;
+      font-size:9px;
+    }
+
+    .opp-municipal-context__head b {
+      height:max-content;
+      padding:4px 7px;
+      border-radius:999px;
+      background:#eef8f4;
+      color:#2f7d63;
+      font-size:8px;
+    }
+
+    .opp-municipal-context__grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px;
+    }
+
+    .opp-municipal-context__grid > div {
+      padding:7px;
+      border-radius:8px;
+      background:#f8fafc;
+    }
+
+    .opp-municipal-context__grid strong {
+      display:block;
+      margin-top:2px;
+      color:#0f172a;
+      font-size:12px;
+    }
+
+    .opp-municipal-context__grid small,
+    .opp-municipal-context__note {
+      color:#94a3b8;
+      font-size:8px;
+    }
+
+    .opp-municipal-context__capital {
+      margin-top:7px;
+      padding:7px;
+      border-radius:8px;
+      background:#f1f5f9;
+      color:#334155;
+      font-size:10px;
+      font-weight:700;
+    }
+
+    .opp-municipal-context__note {
+      display:block;
+      margin-top:5px;
+      line-height:1.35;
+    }
+
+    #opp-context-loading,
+    #opp-context-error {
+      padding:7px 0;
+      color:#64748b;
+      font-size:10px;
+    }
+  </style>
+
   <script>
     /* SOOI_G3_OPPORTUNITY_MAP_PILOT_UI_V1_BEHAVIOR */
     (function () {
@@ -1742,6 +1878,7 @@
       }
 
       const endpoint = root.dataset.endpoint;
+      const contextEndpoint = root.dataset.contextEndpoint;
       const mapStyle = root.dataset.mapStyle;
 
       const canvas = document.getElementById("opp-map-canvas");
@@ -1757,6 +1894,18 @@
       const panelTitle = document.getElementById("opp-map-panel-title");
       const panelCount = document.getElementById("opp-map-panel-count");
       const panelList = document.getElementById("opp-map-panel-list");
+
+      const contextRoot = document.getElementById("opp-municipal-context");
+      const contextLocation = document.getElementById("opp-context-location");
+      const contextCommunity = document.getElementById("opp-context-community");
+      const contextPopulation = document.getElementById("opp-context-population");
+      const contextAltitude = document.getElementById("opp-context-altitude");
+      const contextSurface = document.getElementById("opp-context-surface");
+      const contextDensity = document.getElementById("opp-context-density");
+      const contextCapital = document.getElementById("opp-context-capital");
+      const contextLoading = document.getElementById("opp-context-loading");
+      const contextError = document.getElementById("opp-context-error");
+      const contextContent = document.getElementById("opp-context-content");
 
       const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
       const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -1787,6 +1936,9 @@
 
       let map = null;
       let selectedMarker = null;
+
+      const contextCache = new Map();
+      let contextRequestId = 0;
 
 
       function humanize(value) {
@@ -1868,6 +2020,111 @@
         badge.textContent = text;
 
         return badge;
+      }
+
+
+      function contextNumber(value, digits) {
+        const number = Number(value);
+
+        return Number.isFinite(number)
+          ? new Intl.NumberFormat(
+              "es-ES",
+              { maximumFractionDigits: digits }
+            ).format(number)
+          : "—";
+      }
+
+
+      function renderMunicipalContext(context) {
+        contextLocation.textContent =
+          context.municipality + ", " + context.province;
+
+        contextCommunity.textContent =
+          context.autonomous_community || "—";
+
+        contextPopulation.textContent =
+          contextNumber(context.population, 0);
+
+        contextAltitude.textContent =
+          contextNumber(context.altitude_m, 0) + " m";
+
+        contextSurface.textContent =
+          contextNumber(context.surface_km2, 2) + " km²";
+
+        contextDensity.textContent =
+          contextNumber(context.density_per_km2, 1) + " hab./km²";
+
+        contextCapital.textContent =
+          contextNumber(
+            context.distance_to_provincial_capital_km,
+            1
+          )
+          + " km a "
+          + context.provincial_capital
+          + " · línea recta aprox.";
+
+        contextLoading.hidden = true;
+        contextError.hidden = true;
+        contextContent.hidden = false;
+        contextRoot.hidden = false;
+      }
+
+
+      async function loadMunicipalContext(feature) {
+        const key = String(feature.id || "");
+        const requestId = ++contextRequestId;
+
+        contextRoot.hidden = false;
+        contextLoading.hidden = false;
+        contextError.hidden = true;
+        contextContent.hidden = true;
+
+        if (contextCache.has(key)) {
+          renderMunicipalContext(contextCache.get(key));
+          return;
+        }
+
+        try {
+          const url = new URL(
+            contextEndpoint,
+            window.location.origin
+          );
+
+          url.searchParams.set("canonical_key", key);
+
+          const response = await fetch(
+            url.toString(),
+            {
+              credentials: "same-origin",
+              headers: { "Accept": "application/json" }
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error("Context HTTP " + response.status);
+          }
+
+          const payload = await response.json();
+
+          if (
+            payload.contract !== "SOOI_MUNICIPAL_CONTEXT_V1"
+            || requestId !== contextRequestId
+          ) {
+            return;
+          }
+
+          contextCache.set(key, payload.context);
+          renderMunicipalContext(payload.context);
+
+        } catch (error) {
+          if (requestId !== contextRequestId) {
+            return;
+          }
+
+          contextLoading.hidden = true;
+          contextContent.hidden = true;
+          contextError.hidden = false;
+        }
       }
 
 
@@ -1988,6 +2245,8 @@
 
         panelEmpty.hidden = true;
         panelContent.hidden = false;
+
+        void loadMunicipalContext(feature);
       }
 
 
