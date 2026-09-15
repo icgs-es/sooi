@@ -1,6 +1,7 @@
 from apps.seguimiento.map_dataset import build_opportunity_map_dataset
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
+from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from .models import Alert, FollowUpTask, OpportunityActivity, PropertyOpportunity, BrokerCompany, OpportunityContact
