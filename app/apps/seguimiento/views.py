@@ -1,3 +1,4 @@
+from apps.seguimiento.map_dataset import build_opportunity_map_dataset
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -5,6 +6,8 @@ from django.contrib import messages
 from .models import Alert, FollowUpTask, OpportunityActivity, PropertyOpportunity, BrokerCompany, OpportunityContact
 
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
 from apps.busquedas.models import SearchProfile
 from .forms import AlertForm, OpportunityActivityQuickForm, OpportunityForm, BrokerCompanyForm, OpportunityContactForm
 from apps.core.daily_workflow import opportunity_daily_queryset, task_daily_queryset
@@ -994,3 +997,53 @@ def opportunity_bulk_discard(request):
         messages.warning(request, "No se encontró ninguna oportunidad activa para descartar.")
 
     return redirect("opportunity_list")
+
+
+@login_required
+@require_GET
+def opportunity_map_dataset(request):
+    """
+    Authenticated operational opportunity map dataset.
+
+    Scope intentionally mirrors the default opportunity list:
+    owner=request.user and discarded opportunities excluded.
+    """
+    queryset = (
+        PropertyOpportunity.objects
+        .filter(
+            owner=request.user,
+        )
+        .exclude(
+            status=(
+                PropertyOpportunity
+                .Status
+                .DISCARDED
+            ),
+        )
+        .select_related(
+            "captured_property",
+            "captured_property__source",
+        )
+        .order_by(
+            "pk",
+        )
+    )
+
+    payload = (
+        build_opportunity_map_dataset(
+            queryset,
+            detail_url_resolver=(
+                lambda pk: reverse(
+                    "opportunity_detail",
+                    args=[pk],
+                )
+            ),
+        )
+    )
+
+    return JsonResponse(
+        payload,
+        json_dumps_params={
+            "ensure_ascii": False,
+        },
+    )

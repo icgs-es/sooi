@@ -10,6 +10,7 @@ from .views import (
     opportunity_detail,
     opportunity_edit,
     opportunity_list,
+    opportunity_map_dataset,
     opportunity_delete,
     opportunity_add_activity,
     opportunity_quick_action,
@@ -26,6 +27,7 @@ from .views import (
 urlpatterns = [
     path("agenda/", agenda_view, name="agenda_view"),
     path("oportunidades/", opportunity_list, name="opportunity_list"),
+    path("oportunidades/mapa/datos/", opportunity_map_dataset, name="opportunity_map_dataset"),
     path("oportunidades/accion-masiva/descartar/", seguimiento_views.opportunity_bulk_discard, name="opportunity_bulk_discard"),
     path("oportunidades/<int:pk>/", opportunity_detail, name="opportunity_detail"),
     path("oportunidades/<int:pk>/editar/", opportunity_edit, name="opportunity_edit"),
