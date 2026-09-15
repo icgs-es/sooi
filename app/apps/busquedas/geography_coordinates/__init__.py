@@ -9,6 +9,19 @@ from .loader import (
     coordinate_for_canonical_key,
     load_coordinate_registry,
 )
+from .map_read_service import (
+    MAP_READ_SERVICE_CONTRACT,
+    STATUS_NO_CANONICAL_IDENTITY,
+    STATUS_NO_COORDINATE_RECORD,
+    STATUS_READY,
+    STATUS_UNSAFE_COORDINATE,
+    OpportunityMapPoint,
+    OpportunityMapResolution,
+    map_points_for_opportunities,
+    map_read_summary,
+    resolve_opportunity_map_point,
+    resolve_opportunity_map_points,
+)
 from .models import CoordinatePoint
 
 
@@ -18,9 +31,20 @@ __all__ = [
     "CoordinateRegistryError",
     "IDENTITY_AUTHORITY",
     "MAP_DISPLAY_LABEL_ES",
+    "MAP_READ_SERVICE_CONTRACT",
+    "OpportunityMapPoint",
+    "OpportunityMapResolution",
     "PRECISION_CLASS",
     "REGISTRY_NAME",
     "REGISTRY_VERSION",
+    "STATUS_NO_CANONICAL_IDENTITY",
+    "STATUS_NO_COORDINATE_RECORD",
+    "STATUS_READY",
+    "STATUS_UNSAFE_COORDINATE",
     "coordinate_for_canonical_key",
     "load_coordinate_registry",
+    "map_points_for_opportunities",
+    "map_read_summary",
+    "resolve_opportunity_map_point",
+    "resolve_opportunity_map_points",
 ]
