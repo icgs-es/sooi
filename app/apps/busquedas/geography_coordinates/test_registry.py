@@ -14,6 +14,19 @@ from .loader import (
 class CoordinateRegistryV1Tests(
     unittest.TestCase
 ):
+
+    def test_promoted_registry_manifest_is_active(self):
+        from apps.busquedas.geography_coordinates import (
+            load_coordinate_registry,
+        )
+
+        registry = load_coordinate_registry()
+
+        self.assertEqual(
+            registry.manifest.get("status"),
+            "ACTIVE",
+        )
+
     def test_registry_identity(self):
         registry = (
             load_coordinate_registry()
