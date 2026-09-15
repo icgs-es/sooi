@@ -63,7 +63,7 @@
     id="opp-map-pilot"
     class="page-card opp-map-card"
     data-endpoint="{% url 'opportunity_map_dataset' %}"
-    data-tile-url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    data-map-style="https://tiles.openfreemap.org/styles/liberty"
     aria-labelledby="opp-map-title"
   >
     <div class="opp-map-card__head">
@@ -1592,7 +1592,7 @@
       }
 
       const endpoint = root.dataset.endpoint;
-      const tileUrl = root.dataset.tileUrl;
+      const mapStyle = root.dataset.mapStyle;
 
       const canvas = document.getElementById("opp-map-canvas");
       const loading = document.getElementById("opp-map-loading");
@@ -1616,6 +1616,24 @@
 
       const LEAFLET_JS_INTEGRITY =
         "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=";
+
+      const MAPLIBRE_CSS =
+        "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css";
+
+      const MAPLIBRE_JS =
+        "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js";
+
+      const MAPLIBRE_LEAFLET_JS =
+        "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js";
+
+      const MAPLIBRE_CSS_INTEGRITY =
+        "sha256-qx5w1Z7EBGW65+cDDaLzzPKBM/1QLmK9WY7vut/XpzI=";
+
+      const MAPLIBRE_JS_INTEGRITY =
+        "sha256-RamwepGJzlYFTGIKlHzPQeKR5YyV6bYVM7dAqqZe5cs=";
+
+      const MAPLIBRE_LEAFLET_JS_INTEGRITY =
+        "sha256-HDM2eWLndVwaFtH4Vlj9yWtbqjb4Gt/KlJMXTNG1Js4=";
 
       let map = null;
       let selectedMarker = null;
@@ -1848,36 +1866,62 @@
       }
 
 
-      function loadLeaflet() {
+      function ensureStylesheet(
+        url,
+        integrity,
+        key
+      ) {
         if (
-          window.L
-          && typeof window.L.map === "function"
+          document.querySelector(
+            'link[data-sooi-map-asset="' + key + '"]'
+          )
         ) {
-          return Promise.resolve(window.L);
+          return;
+        }
+
+        const link = document.createElement("link");
+
+        link.rel = "stylesheet";
+        link.href = url;
+        link.integrity = integrity;
+        link.crossOrigin = "anonymous";
+        link.dataset.sooiMapAsset = key;
+
+        document.head.appendChild(link);
+      }
+
+
+      function loadScript(
+        url,
+        integrity,
+        key,
+        ready
+      ) {
+        if (ready()) {
+          return Promise.resolve();
         }
 
         return new Promise(function (resolve, reject) {
-          if (!document.querySelector('link[data-sooi-leaflet="1"]')) {
-            const link = document.createElement("link");
-
-            link.rel = "stylesheet";
-            link.href = LEAFLET_CSS;
-            link.integrity = LEAFLET_CSS_INTEGRITY;
-            link.crossOrigin = "anonymous";
-            link.dataset.sooiLeaflet = "1";
-
-            document.head.appendChild(link);
-          }
+          const selector =
+            'script[data-sooi-map-asset="' + key + '"]';
 
           const existing = document.querySelector(
-            'script[data-sooi-leaflet="1"]'
+            selector
           );
 
           if (existing) {
             existing.addEventListener(
               "load",
               function () {
-                resolve(window.L);
+                if (ready()) {
+                  resolve();
+                } else {
+                  reject(
+                    new Error(
+                      "Activo cartográfico inválido: " + key
+                    )
+                  );
+                }
               },
               { once: true }
             );
@@ -1885,7 +1929,11 @@
             existing.addEventListener(
               "error",
               function () {
-                reject(new Error("Leaflet no disponible"));
+                reject(
+                  new Error(
+                    "No se pudo cargar: " + key
+                  )
+                );
               },
               { once: true }
             );
@@ -1895,21 +1943,22 @@
 
           const script = document.createElement("script");
 
-          script.src = LEAFLET_JS;
-          script.integrity = LEAFLET_JS_INTEGRITY;
+          script.src = url;
+          script.integrity = integrity;
           script.crossOrigin = "anonymous";
-          script.dataset.sooiLeaflet = "1";
+          script.dataset.sooiMapAsset = key;
 
           script.addEventListener(
             "load",
             function () {
-              if (
-                window.L
-                && typeof window.L.map === "function"
-              ) {
-                resolve(window.L);
+              if (ready()) {
+                resolve();
               } else {
-                reject(new Error("Leaflet inválido"));
+                reject(
+                  new Error(
+                    "Activo cartográfico inválido: " + key
+                  )
+                );
               }
             },
             { once: true }
@@ -1918,13 +1967,70 @@
           script.addEventListener(
             "error",
             function () {
-              reject(new Error("No se pudo cargar Leaflet"));
+              reject(
+                new Error(
+                  "No se pudo cargar: " + key
+                )
+              );
             },
             { once: true }
           );
 
           document.head.appendChild(script);
         });
+      }
+
+
+      async function loadMapStack() {
+        ensureStylesheet(
+          LEAFLET_CSS,
+          LEAFLET_CSS_INTEGRITY,
+          "leaflet-css"
+        );
+
+        ensureStylesheet(
+          MAPLIBRE_CSS,
+          MAPLIBRE_CSS_INTEGRITY,
+          "maplibre-css"
+        );
+
+        await loadScript(
+          LEAFLET_JS,
+          LEAFLET_JS_INTEGRITY,
+          "leaflet-js",
+          function () {
+            return Boolean(
+              window.L
+              && typeof window.L.map === "function"
+            );
+          }
+        );
+
+        await loadScript(
+          MAPLIBRE_JS,
+          MAPLIBRE_JS_INTEGRITY,
+          "maplibre-js",
+          function () {
+            return Boolean(
+              window.maplibregl
+              && typeof window.maplibregl.Map === "function"
+            );
+          }
+        );
+
+        await loadScript(
+          MAPLIBRE_LEAFLET_JS,
+          MAPLIBRE_LEAFLET_JS_INTEGRITY,
+          "maplibre-leaflet-js",
+          function () {
+            return Boolean(
+              window.L
+              && typeof window.L.maplibreGL === "function"
+            );
+          }
+        );
+
+        return window.L;
       }
 
 
@@ -2025,7 +2131,7 @@
             return;
           }
 
-          const L = await loadLeaflet();
+          const L = await loadMapStack();
 
           loading.hidden = true;
 
@@ -2044,31 +2150,51 @@
             5
           );
 
-          const tiles = L.tileLayer(
-            tileUrl,
+          if (
+            !mapStyle
+            || typeof L.maplibreGL !== "function"
+          ) {
+            throw new Error(
+              "Basemap vectorial no disponible"
+            );
+          }
+
+          const vectorBasemap = L.maplibreGL(
             {
-              minZoom: 4,
-              maxZoom: 18,
-              attribution:
-                '&copy; <a href="https://www.openstreetmap.org/copyright" '
-                + 'target="_blank" rel="noopener noreferrer">'
-                + 'OpenStreetMap</a> contributors'
+              style: mapStyle,
+              attributionControl: false
             }
           );
 
-          let tileErrorSeen = false;
+          vectorBasemap.addTo(map);
 
-          tiles.on(
-            "tileerror",
+          map.attributionControl.addAttribution(
+            '<a href="https://openfreemap.org/" '
+            + 'target="_blank" rel="noopener noreferrer">'
+            + 'OpenFreeMap</a> '
+            + '&copy; <a href="https://openmaptiles.org/" '
+            + 'target="_blank" rel="noopener noreferrer">'
+            + 'OpenMapTiles</a> '
+            + 'Data from <a '
+            + 'href="https://www.openstreetmap.org/copyright" '
+            + 'target="_blank" rel="noopener noreferrer">'
+            + 'OpenStreetMap</a>'
+          );
+
+          const maplibreMap =
+            vectorBasemap.getMaplibreMap();
+
+          let basemapErrorSeen = false;
+
+          maplibreMap.on(
+            "error",
             function () {
-              if (!tileErrorSeen) {
-                tileErrorSeen = true;
+              if (!basemapErrorSeen) {
+                basemapErrorSeen = true;
                 tileWarning.hidden = false;
               }
             }
           );
-
-          tiles.addTo(map);
 
           L.control.scale(
             {
